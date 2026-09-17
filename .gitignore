@@ -1,0 +1,67 @@
+# ============================================================
+# .gitignore —— 告诉 git「这些文件不要上传」
+# 每行是一种匹配规则，匹配到的文件会被 git 自动忽略
+# ============================================================
+
+# ---------- 敏感信息（绝对不能上传，安全第一）----------
+
+# .env 环境变量文件（里面常放数据库密码、API 密钥）
+.env
+.env.*
+!.env.example
+
+# API 密钥、token、证书
+*.key
+*.token
+*.secret
+secrets.*
+secret.*
+credentials.*
+
+# 密码相关文件
+password*
+*.pass
+
+# ---------- 依赖目录（能重新下载，不用上传）----------
+
+# Node.js 依赖
+node_modules/
+
+# Python 依赖和缓存
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# 其他语言的构建产物 / 依赖
+target/
+dist/
+build/
+.gradle/
+vendor/
+bower_components/
+packages/
+
+# ---------- 本地数据库文件 ----------
+*.db
+*.sqlite
+*.sqlite3
+*.mdb
+*.ldb
+*.accdb
+
+# ---------- 系统 / 编辑器垃圾文件 ----------
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log
+.vscode/
+.idea/
+*.swp
+*~
+
+# ---------- 临时文件 ----------
+*.tmp
+*.temp
