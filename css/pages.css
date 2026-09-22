@@ -1,0 +1,110 @@
+/* ============================================================
+   pages.css —— 三个页面各自的布局与组件样式
+   对应：TECH_DESIGN.md 第 2 节「css/pages.css 三个页面的布局与组件样式」
+   注意：本文件只放「某个页面专用」的样式，公共部分在 base.css；
+         且只放「当前页面骨架真正用到的」样式，后续任务需要的按对应任务再加
+   ============================================================ */
+
+/* ============================================================
+   首页 index.html —— 今日课表（P1）
+   已实现：V1.5 空课表（空状态样式在 base.css 的 .empty-state，三页可复用）
+   待实现：V1.1 / V1.2 / V1.3 / V1.4 今日视图（T5）、V1.6 周视图（T7）
+   ============================================================ */
+
+/* 说明：首页的其余样式在后续任务加入 ——
+   - 顶部信息条、「下一节课」信息条、今日课程列表、状态标签 → T5
+   - 今日 / 周视图切换、周视图网格（grid-row: span N 处理连堂课）→ T7
+   本轮不预写，避免出现「样式存在但页面无对应结构」的悬空代码。 */
+
+/* ============================================================
+   导入页 import.html（P2）
+   已实现：V2.1 导入前（三步说明 + 操作按钮区）
+   待实现：V2.2 导入成功（T3）、V2.3 导入失败（T3）、V2.4 课程管理（T4）
+   ============================================================ */
+
+/* 三步操作说明（V2.1） */
+.steps {
+  counter-reset: step;
+}
+
+.steps__item {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-sm);
+}
+
+.steps__item:last-child {
+  border-bottom: none;
+}
+
+.steps__num {
+  flex: 0 0 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--color-brand-weak);
+  color: var(--color-brand);
+  font-size: var(--font-xs);
+  font-weight: 600;
+}
+
+/* 操作按钮区（导入页 / 设置页共用） */
+.action-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* 说明：导入页的其余样式在后续任务加入 ——
+   - 解析结果统计 → V2.2（T3）
+   - 错误提示框 → V2.3（T3）
+   - 手动录入课程表单 → V2.4（T4） */
+
+/* ============================================================
+   设置页 settings.html（P3）
+   已实现：V3.1 常规设置骨架、V3.2 数据管理按钮区
+   待实现：各设置项的实际读写（T8）
+   ============================================================ */
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-sm);
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-row__label {
+  flex: 1;
+}
+
+.setting-row__value {
+  color: var(--color-text-weak);
+  font-size: var(--font-sm);
+}
+
+/* 危险操作按钮（「清空全部数据」，实际功能与二次确认在 T8） */
+.btn--danger {
+  background: var(--color-surface);
+  border: 1px solid #f0b4ae;
+  color: #b3352b;
+}
+
+/* 页面底部的说明文字（导入页 / 设置页共用） */
+.page-note {
+  margin-top: var(--space-4);
+  padding: 0 var(--space-1);
+  font-size: var(--font-xs);
+  color: var(--color-text-weak);
+  line-height: 1.8;
+}

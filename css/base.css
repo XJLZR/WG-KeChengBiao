@@ -1,0 +1,214 @@
+/* ============================================================
+   base.css —— 全局基础样式
+   内容：CSS 变量、样式重置、字体、通用间距、页头 / 页脚导航
+   对应：TECH_DESIGN.md 第 2 节「css/base.css 变量、重置、字体、通用间距」
+   注意：本文件只放「三个页面都要用的东西」，页面各自的布局放 pages.css
+   ============================================================ */
+
+/* ---------- 1. 设计变量（颜色、字号、间距都从这里取） ---------- */
+:root {
+  /* 颜色：先用一套克制的浅色方案，课程配色留到 T7 周视图再加 */
+  --color-bg: #f5f6f8;          /* 页面底色 */
+  --color-surface: #ffffff;      /* 卡片底色 */
+  --color-border: #e3e5e9;       /* 分隔线 / 边框 */
+  --color-text: #1f2329;         /* 主文字 */
+  --color-text-weak: #8a9099;    /* 次要文字 */
+  --color-brand: #2f6fed;        /* 主色（按钮、选中态） */
+  --color-brand-weak: #eaf1fe;   /* 主色浅底 */
+
+  /* 间距 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* 圆角 */
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  /* 字号 */
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-md: 16px;
+  --font-lg: 20px;
+  --font-xl: 26px;
+
+  /* 布局 */
+  --header-height: 52px;
+  --content-max: 720px;         /* 手机优先：桌面端也不铺满，居中一列 */
+}
+
+/* ---------- 2. 样式重置（清掉浏览器默认样式差异） ---------- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* 100% 而不是固定值：手机上不会因为地址栏收放而跳动 */
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-md);
+  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei",
+    "PingFang SC", "Hiragino Sans GB", sans-serif;
+  /* 手机上禁止左右滑动，右侧留白 */
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ---------- 3. 页头（三个页面共用） ---------- */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.app-header__title {
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+
+/* 页头左上角的返回链接（导入页 / 设置页用，首页不加返回链接） */
+.app-header__back {
+  position: absolute;
+  left: var(--space-3);
+  font-size: var(--font-sm);
+  color: var(--color-brand);
+}
+
+/* ---------- 4. 主体容器 ---------- */
+.app-main {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-4);
+  /* 给底部导航留出空间，否则内容会被导航条压住 */
+  padding-bottom: 96px;
+}
+
+/* ---------- 5. 底部导航（三个页面共用） ---------- */
+.app-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  /* 适配带小横条的全面屏手机 */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.app-nav__item {
+  flex: 1;
+  text-align: center;
+  padding: var(--space-3) 0;
+  font-size: var(--font-xs);
+  color: var(--color-text-weak);
+}
+
+.app-nav__item.is-active {
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
+/* ---------- 6. 通用组件：卡片、分区标题、按钮、空状态 ---------- */
+
+/* 卡片：页面上成块的白色区域 */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.card + .card {
+  margin-top: var(--space-3);
+}
+
+/* 分区小标题 */
+.section-title {
+  font-size: var(--font-xs);
+  color: var(--color-text-weak);
+  margin-bottom: var(--space-2);
+  padding-left: var(--space-1);
+}
+
+/* 主要按钮 */
+.btn {
+  display: inline-block;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  text-align: center;
+}
+
+.btn--primary {
+  background: var(--color-brand);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* 次要按钮：白底带边框 */
+.btn--ghost {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+/* 空状态区块：一个居中的提示 + 可选的按钮 */
+.empty-state {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+}
+
+.empty-state__title {
+  font-size: var(--font-lg);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.empty-state__desc {
+  font-size: var(--font-sm);
+  color: var(--color-text-weak);
+  margin-bottom: var(--space-5);
+}
+
+/* 小字提示（例如「功能开发中」） */
+.hint {
+  font-size: var(--font-xs);
+  color: var(--color-text-weak);
+  line-height: 1.8;
+}

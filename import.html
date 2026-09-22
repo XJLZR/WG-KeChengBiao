@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>WG课程表 · 导入课表</title>
+
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/pages.css">
+</head>
+
+<body>
+  <header class="app-header">
+    <a class="app-header__back" href="./index.html">返回</a>
+    <h1 class="app-header__title">导入课表</h1>
+  </header>
+
+  <main class="app-main">
+    <!-- ============================================================
+         V2.1 导入前视图（本阶段实现外观骨架）
+         PRD 说：「选择课表文件」按钮 + 三步操作说明 +「手动添加课程」入口
+         本阶段不接文件解析（属 T2 / T3），按钮先不绑定任何行为
+         ============================================================ -->
+    <section class="card">
+      <p class="section-title">从教务系统导出课表文件</p>
+      <ol class="steps">
+        <li class="steps__item">
+          <span class="steps__num">1</span>
+          <span>登录学校教务系统，进入「学生个人课表」</span>
+        </li>
+        <li class="steps__item">
+          <span class="steps__num">2</span>
+          <span>把展示方式切换为「列表展示」</span>
+        </li>
+        <li class="steps__item">
+          <span class="steps__num">3</span>
+          <span>点击「导出」，保存导出的 .htm 文件</span>
+        </li>
+      </ol>
+
+      <div class="action-row">
+        <!-- 注：解析逻辑属 T2/T3，本阶段按钮不绑定行为 -->
+        <button class="btn btn--primary" type="button" disabled>选择课表文件</button>
+        <a class="btn btn--ghost" href="./settings.html">先去看看设置</a>
+      </div>
+      <p class="page-note">导入功能尚未接入，当前为页面骨架（对应 PRD 第 7 节 T1）。</p>
+    </section>
+
+    <!-- ============================================================
+         后续阶段要实现的视图，本阶段留占位注释
+         - V2.2 导入成功（解析结果统计 + 保存并使用 + 替换前二次确认）→ T3
+         - V2.3 导入失败（区分三种原因）→ T3
+         - V2.4 课程管理（新增 / 修改 / 删除）→ T4
+         ============================================================ -->
+  </main>
+
+  <nav class="app-nav">
+    <a class="app-nav__item" href="./index.html">今日</a>
+    <a class="app-nav__item is-active" href="./import.html">导入</a>
+    <a class="app-nav__item" href="./settings.html">设置</a>
+  </nav>
+</body>
+
+</html>

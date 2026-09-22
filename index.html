@@ -1,12 +1,52 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WG课程表</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>WG课程表 · 今日课表</title>
+
+  <!-- 样式：相对路径（./），因为将来部署在 GitHub Pages 子路径下，
+       写成 /css/base.css 会 404（TECH_DESIGN 6.4 已知坑） -->
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/pages.css">
 </head>
+
 <body>
-  <h1>WG课程表</h1>
-  <p>项目初始化完成，功能开发中。</p>
+  <!-- 页头：首页不加返回链接 -->
+  <header class="app-header">
+    <h1 class="app-header__title">WG课程表</h1>
+  </header>
+
+  <main class="app-main">
+    <!-- ============================================================
+         V1.5 空课表视图（本阶段实现）
+         显示条件：从未导入过课表，一条课程都没有
+         PRD 说：显示空状态引导「先去导入课表」按钮，点击跳到导入页
+         ============================================================ -->
+    <section class="card empty-state" id="view-empty">
+      <p class="empty-state__title">还没有课表数据</p>
+      <p class="empty-state__desc">从教务系统导出课表文件，导入后就能看到今天上什么课</p>
+      <a class="btn btn--primary" href="./import.html">去导入课表</a>
+    </section>
+
+    <!-- ============================================================
+         以下为后续阶段要实现的视图，本阶段先留占位注释，不写代码、不显示
+         - V1.1 今日有课    → T5
+         - V1.2 今日没课    → T5
+         - V1.3 非教学周    → T5
+         - V1.4 本周没课    → T5
+         - V1.6 周视图      → T7
+         ============================================================ -->
+  </main>
+
+  <!-- 底部导航：三个页面共用的跳转入口 -->
+  <nav class="app-nav">
+    <a class="app-nav__item is-active" href="./index.html">今日</a>
+    <a class="app-nav__item" href="./import.html">导入</a>
+    <a class="app-nav__item" href="./settings.html">设置</a>
+  </nav>
 </body>
+
 </html>

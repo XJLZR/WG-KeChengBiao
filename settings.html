@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>WG课程表 · 设置</title>
+
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/pages.css">
+</head>
+
+<body>
+  <header class="app-header">
+    <a class="app-header__back" href="./index.html">返回</a>
+    <h1 class="app-header__title">设置</h1>
+  </header>
+
+  <main class="app-main">
+    <!-- ============================================================
+         V3.1 常规设置（本阶段实现外观骨架）
+         PRD 说：① 学期第一周周一的日期 ② 节次时间表（第 1–12 节起止时间）
+         本阶段不接存储、不可编辑（属 T8）
+         ============================================================ -->
+    <section class="card">
+      <p class="section-title">学期设置</p>
+
+      <div class="setting-row">
+        <span class="setting-row__label">学期第一周周一</span>
+        <span class="setting-row__value">2026-08-31</span>
+      </div>
+
+      <div class="setting-row">
+        <span class="setting-row__label">节次时间表</span>
+        <span class="setting-row__value">第 1–12 节</span>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         V3.2 数据管理（本阶段只放按钮外观，不绑定行为）
+         PRD 说：导出备份 / 导入备份 / 导出课表日历（.ics）/ 清空全部数据（二次确认）
+         ============================================================ -->
+    <section class="card">
+      <p class="section-title">数据管理</p>
+
+      <div class="action-row">
+        <button class="btn btn--ghost" type="button" disabled>导出备份</button>
+        <button class="btn btn--ghost" type="button" disabled>导入备份</button>
+        <button class="btn btn--ghost" type="button" disabled>导出课表日历（.ics）</button>
+        <button class="btn btn--danger" type="button" disabled>清空全部数据</button>
+      </div>
+
+      <p class="page-note">
+        设置页功能尚未接入，当前为页面骨架（对应 PRD 第 7 节 T1）。
+        数据只保存在这台设备的浏览器里，不会上传到任何服务器。
+      </p>
+    </section>
+  </main>
+
+  <nav class="app-nav">
+    <a class="app-nav__item" href="./index.html">今日</a>
+    <a class="app-nav__item" href="./import.html">导入</a>
+    <a class="app-nav__item is-active" href="./settings.html">设置</a>
+  </nav>
+</body>
+
+</html>
