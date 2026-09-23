@@ -15,6 +15,7 @@
        （空状态自身的样式在 base.css 的 .empty-state，三个页面可复用）
      · 周视图：12 节 × 7 天网格、连堂课跨行、今天所在列高亮
      · 课程配色：8 套色板，按课程名固定分配
+     · 首页级过程状态：V1.7 加载中、V1.8 读取失败（见本节末尾）
 
    注意：本节样式全部只服务首页。导入页与设置页按 PRD 保持朴素，
          不使用课程配色。
@@ -269,6 +270,66 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ============================================================
+   首页级过程状态（PRD V1.7 加载中 / V1.8 读取失败）
+   这两个状态出现时，首页的其余部分（信息条、视图切换、今日与周视图）都不显示，
+   由 js/ui-home.js 的 showPageState() 统一切换
+   ============================================================ */
+
+/* ---------- V1.7 加载中 ---------- */
+.state-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  /* 盖掉 .card 的默认内边距，让转圈在卡片里居中且有足够留白 */
+  padding: var(--space-6) var(--space-4);
+}
+
+/* 用「一个圆 + 一段主色圆弧 + 旋转」画转圈，不引入任何图片或图标文件 */
+.state-loading__spinner {
+  width: 26px;
+  height: 26px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-brand);
+  border-radius: 50%;
+  animation: state-loading-spin 0.8s linear infinite;
+}
+
+@keyframes state-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 用户在系统里开了「减少动态效果」就不转，只留一个静止的圈 */
+@media (prefers-reduced-motion: reduce) {
+  .state-loading__spinner {
+    animation: none;
+  }
+}
+
+.state-loading__text {
+  font-size: var(--font-sm);
+  color: var(--color-text-weak);
+}
+
+/* ---------- V1.8 读取失败 ---------- */
+/* 版式沿用 .empty-state（居中的卡片），但语义不同 ——
+   它是「读取失败」，不是「还没有课表数据」（PRD V1.8 明文禁止混用）。
+   所以边框与标题都换成警示色，与空状态在视觉上就能分辨。
+   警示色与下方 .btn--danger 用同一支 #f0b4ae / #b3352b。 */
+.state-error {
+  border-color: #f0b4ae;
+}
+
+.state-error__title {
+  margin-bottom: var(--space-2);
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: #b3352b;
 }
 
 /* ============================================================

@@ -1,6 +1,6 @@
 /* ============================================================
    ui-home.js —— 首页：视图切换与渲染
-   对应：TECH_DESIGN.md 第 2 节 js/ui-home.js、PRD.md 第 4 节 P1（V1.1–V1.6）
+   对应：TECH_DESIGN.md 第 2 节 js/ui-home.js、PRD.md 第 4 节 P1（V1.1–V1.8）
 
    分层约定（TECH_DESIGN 第 2 节）：界面层只调用 schedule.js 这类逻辑函数，
    不直接碰 IndexedDB 或 localStorage。所有「算」的活都在 schedule.js，
@@ -15,6 +15,15 @@ const PERIOD_COUNT = 12;
 
 /* 课程配色的数量，对应 css/pages.css 里的 .course-color-1 ～ .course-color-8 */
 const COURSE_COLOR_COUNT = 8;
+
+/* 「加载中」延迟显示的毫秒数（PRD V1.7）：读取耗时超过它才显示加载页 */
+const LOADING_DELAY_MS = 250;
+
+/* 首页级过程状态的容器 id（PRD V1.7 / V1.8）：同一时间最多显示一个 */
+const PAGE_STATE_IDS = ['state-loading', 'state-error'];
+
+/* 读取成功时才显示的正常内容 —— 过程状态出现时，这些全部藏起来 */
+const NORMAL_IDS = ['weekbar', 'view-switch', 'view-today', 'view-week'];
 
 /* 状态标签的中文。内部用英文代号，显示时才翻译（TECH_DESIGN 6.1：
    「用户看懂的，和开发看懂的，分开」） */
@@ -250,53 +259,154 @@ function renderWeekGrid(courses, week, todayWeekday) {
 
 /* ---------- 视图切换 ---------- */
 
+/** 当前选中的视图：'today'（今日，PRD V1.1–V1.5）| 'week'（周视图，PRD V1.6） */
+let activeView = 'today';
+
+/**
+ * 按 activeView 显示对应的视图容器。
+ * 单独抽出来是因为「读取过程结束、恢复正常内容」时也要重新显示一次。
+ */
+function applyView() {
+  document.getElementById('view-today').classList.toggle('is-hidden', activeView !== 'today');
+  document.getElementById('view-week').classList.toggle('is-hidden', activeView !== 'week');
+}
+
 /**
  * 「今日 / 周视图」切换。
- * 按钮上写 data-view="today" / "week"，与视图容器的 id（view-today / view-week）
- * 一一对应，所以按钮值改了就自动对上，不需要写 if 分支。
+ * 按钮上写 data-view="today" / "week"，与 applyView() 的判断一一对应，
+ * 按钮值改了就自动对上，不需要写 if 分支。
  */
 function initViewSwitch() {
   const switchBox = document.getElementById('view-switch');
   if (!switchBox) return;
 
-  const buttons = switchBox.querySelectorAll('.view-switch__btn');
-  const views = document.querySelectorAll('.view');
-
   switchBox.addEventListener('click', (event) => {
     const btn = event.target.closest('.view-switch__btn');
     if (!btn) return;
 
-    const targetId = `view-${btn.dataset.view}`;
+    activeView = btn.dataset.view;
 
     // 按钮：只高亮被点的那一个
-    buttons.forEach((b) => b.classList.toggle('is-active', b === btn));
+    switchBox.querySelectorAll('.view-switch__btn').forEach((b) => {
+      b.classList.toggle('is-active', b === btn);
+    });
 
-    // 视图：只显示被点的那一个
-    views.forEach((v) => v.classList.toggle('is-hidden', v.id !== targetId));
+    applyView();
   });
+}
+
+/* ---------- 首页级过程状态（PRD V1.7 加载中 / V1.8 读取失败） ---------- */
+
+/**
+ * 显示某个过程状态，或传 null 回到正常内容。
+ * 依据 PRD 第 4 节补充规则 1：过程状态出现时，今日视图与周视图的内容都不显示。
+ *
+ * 这里连顶部信息条和视图切换也一起藏起来，理由：「第 N 周 · 日期」是用读到的设置
+ * 算出来的，读取还没完成（或已经失败）时那一行只能显示「—」，留着反而像页面坏了。
+ */
+function showPageState(stateId) {
+  PAGE_STATE_IDS.forEach((id) => {
+    document.getElementById(id).classList.toggle('is-hidden', id !== stateId);
+  });
+
+  const isNormal = stateId === null;
+  NORMAL_IDS.forEach((id) => {
+    document.getElementById(id).classList.toggle('is-hidden', !isNormal);
+  });
+
+  // 恢复正常时还要按「今日 / 周视图」当前的选择显示对应的那一个
+  if (isNormal) applyView();
+}
+
+/* 读取失败的原因文案（TECH_DESIGN 6.1 第 1 条：用户看中文说明，
+   技术细节只进 console.error）。code 由数据层抛出，「重试」也修不好的情况
+   才这样写；其余情况落到兜底文案。 */
+const READ_ERROR_TEXT = {
+  DATA_CORRUPT: '本机保存的数据结构不完整，可能被改动过',
+  DATA_VERSION_UNSUPPORTED: '本机数据的版本比当前页面新，请刷新页面或更新程序',
+};
+
+/**
+ * V1.8 读取失败：显示一句原因 + 「重试」按钮。
+ * ⚠️ 绝不能落到 V1.5 的「还没有课表数据」——两者含义不同，
+ *    读取失败说成「没有数据」，用户会以为自己的课表丢了（PRD V1.8 明文要求）。
+ */
+function showReadError(error) {
+  console.error('[首页] 读取本机数据失败：', error);
+
+  document.getElementById('state-error-reason').textContent =
+    (error && READ_ERROR_TEXT[error.code]) || '读取本机数据时出错，请稍后重试';
+
+  showPageState('state-error');
 }
 
 /* ---------- 启动 ---------- */
 
-/**
- * 页面加载时跑一次。
- *
- * ⚠️ 将来接真实数据时，只需要把下面两行换成：
- *      const courses = await storage.getCourses();
- *      const settings = storage.getSettings();
- *    再删掉 index.html 里 mock-data.js 那行 <script>，其余不用动。
- */
-function init() {
-  const courses = MOCK_COURSES;
-  const settings = MOCK_SETTINGS;
-  const now = new Date();
+/** 「加载中」用的定时器；数据读回来后要清掉，否则它会把已经显示出的内容盖住 */
+let loadingTimer = null;
 
+/**
+ * 读取本机数据，返回 { courses, settings }。
+ *
+ * ⚠️ 现在返回的是 mock 假数据（同步）。T4 接上本机存储后，把函数体换成
+ *      const courses = await storage.getCourses();
+ *      return { courses, settings: storage.getSettings() };
+ *    即可——数据层返回 Promise 也照样能用，其余代码一行不用动，
+ *    同时删掉 index.html 里 mock-data.js 那行 <script>。
+ *    （两个函数的签名见 TECH_DESIGN.md 4.2「模块间接口」）
+ *
+ * ⚠️ 读取失败时**必须抛出错误**，不要吞掉后返回空数组：
+ *    空数组会被当成「从未导入过」，首页就落到 V1.5 空课表，
+ *    用户会以为课表丢了（PRD 第 7 节 T4 已写明这条约束）。
+ */
+async function readLocalData() {
+  return { courses: MOCK_COURSES, settings: MOCK_SETTINGS };
+}
+
+/** 读取成功后，把首页三块内容都画出来 */
+function renderPage(courses, settings) {
+  const now = new Date();
   const week = getWeekNumber(settings, now);
 
   renderWeekbar(week, now);
   renderTodayView(courses, settings, now);
   renderWeekGrid(courses, week, getWeekday(now));
-  initViewSwitch();
 }
 
-init();
+/**
+ * 首页启动流程：读数据 → 画页面。打开页面时跑一次，「重试」按钮也调它。
+ *
+ * 为什么加载页要「延迟 250ms 才显示」（PRD V1.7）：
+ *   本机读取通常只要几十毫秒，一进入就显示加载页的话，用户看到的是白页闪一下
+ *   ——那比不显示更糟。所以先挂一个 250ms 的定时器，数据读回来就撤销它，
+ *   读不完才让加载页出现。
+ */
+async function bootstrap() {
+  showPageState(null);
+  clearTimeout(loadingTimer);
+  loadingTimer = setTimeout(() => showPageState('state-loading'), LOADING_DELAY_MS);
+
+  try {
+    const data = await readLocalData();
+    clearTimeout(loadingTimer);
+
+    renderPage(data.courses, data.settings);
+    showPageState(null);           // 读取成功 → 收掉过程状态，显示课表
+  } catch (error) {
+    clearTimeout(loadingTimer);
+    showReadError(error);
+  }
+}
+
+/** 「重试」按钮：重新走一遍读取流程（PRD V1.8 要求能重新读取） */
+function initRetryButton() {
+  const btn = document.getElementById('state-error-retry');
+  if (!btn) return;
+
+  btn.addEventListener('click', bootstrap);
+}
+
+/* 页面加载时：先接好「不需要数据」的线，再走一次读取流程 */
+initViewSwitch();
+initRetryButton();
+bootstrap();

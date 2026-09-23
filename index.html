@@ -24,7 +24,7 @@
          顶部信息条（PRD V1.1 第①项）：第 N 周 · 今天日期 · 当前时间
          内容由 js/ui-home.js 算出后填入
          ============================================================ -->
-    <section class="weekbar">
+    <section class="weekbar" id="weekbar">
       <span class="weekbar__week" id="weekbar-week">—</span>
       <span class="weekbar__date" id="weekbar-date">—</span>
     </section>
@@ -92,6 +92,29 @@
         <div class="week-grid" id="week-grid"></div>
       </div>
     </div>
+
+    <!-- ============================================================
+         首页级过程状态（PRD V1.7 / V1.8）
+         这两个是「读取本机数据」这件事本身的状态，不是课表内容的一部分：
+         它们出现时，顶部信息条、视图切换、今日视图与周视图全部不显示
+         （PRD 第 4 节「两条补充规则」第 1 条）。
+         所以它们放在 #view-today / #view-week 之外，由 js/ui-home.js 统一切换。
+         ============================================================ -->
+
+    <!-- ---------- V1.7 加载中：读取耗时超过 250ms 才显示 ---------- -->
+    <section class="card state-loading is-hidden" id="state-loading">
+      <span class="state-loading__spinner"></span>
+      <p class="state-loading__text">正在读取课表…</p>
+    </section>
+
+    <!-- ---------- V1.8 读取失败 ---------- -->
+    <!-- ⚠️ 这里绝不能写成 V1.5 的「还没有课表数据」：两者的含义完全不同，
+         读取失败说成「没有数据」，用户会以为自己的课表丢了（PRD V1.8 明文要求） -->
+    <section class="card empty-state state-error is-hidden" id="state-error">
+      <p class="state-error__title">没能读到本机保存的课表</p>
+      <p class="empty-state__desc" id="state-error-reason"></p>
+      <button class="btn btn--primary" type="button" id="state-error-retry">重试</button>
+    </section>
   </main>
 
   <!-- 底部导航：三个页面共用的跳转入口 -->
