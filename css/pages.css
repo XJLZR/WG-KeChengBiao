@@ -7,14 +7,269 @@
 
 /* ============================================================
    首页 index.html —— 今日课表（P1）
-   已实现：V1.5 空课表（空状态样式在 base.css 的 .empty-state，三页可复用）
-   待实现：V1.1 / V1.2 / V1.3 / V1.4 今日视图（T5）、V1.6 周视图（T7）
+   已实现：
+     · 顶部信息条（第 N 周 · 日期 · 时间）
+     · 今日 / 周视图切换
+     · 今日视图五态：V1.1 有课（下一节课条 + 课程卡片 + 状态标签）、
+       V1.2 今日没课、V1.3 非教学周、V1.4 本周没课、V1.5 空课表
+       （空状态自身的样式在 base.css 的 .empty-state，三个页面可复用）
+     · 周视图：12 节 × 7 天网格、连堂课跨行、今天所在列高亮
+     · 课程配色：8 套色板，按课程名固定分配
+
+   注意：本节样式全部只服务首页。导入页与设置页按 PRD 保持朴素，
+         不使用课程配色。
    ============================================================ */
 
-/* 说明：首页的其余样式在后续任务加入 ——
-   - 顶部信息条、「下一节课」信息条、今日课程列表、状态标签 → T5
-   - 今日 / 周视图切换、周视图网格（grid-row: span N 处理连堂课）→ T7
-   本轮不预写，避免出现「样式存在但页面无对应结构」的悬空代码。 */
+/* 通用：同一时间只显示一个视图 / 容器 */
+.is-hidden {
+  display: none !important;
+}
+
+/* 说明：下面两个 class 故意不写样式，不是漏了 ——
+   .view        是「今日 / 周视图」两个容器的标记，只给 js 用来切换显示；
+   .course-list 是课程列表的容器，卡片之间靠 .course-card + .course-card 拉开间距。 */
+
+/* ---------- 顶部信息条：第 N 周 · 今天日期 ---------- */
+.weekbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-1) var(--space-3);
+}
+
+.weekbar__week {
+  font-size: var(--font-lg);
+  font-weight: 600;
+}
+
+.weekbar__date {
+  font-size: var(--font-sm);
+  color: var(--color-text-weak);
+}
+
+/* ---------- 今日 / 周视图切换 ---------- */
+.view-switch {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  margin-bottom: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.view-switch__btn {
+  flex: 1;
+  padding: var(--space-2) 0;
+  border-radius: 6px;
+  font-size: var(--font-sm);
+  color: var(--color-text-weak);
+}
+
+.view-switch__btn.is-active {
+  background: var(--color-brand-weak);
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
+/* ---------- 课程配色：8 套色板 ---------- */
+/* 同一门课每次都是同一个颜色（由 js/ui-home.js 按课程名哈希后取这里的一档）。
+   三个变量分工：--course-bg 底色、--course-line 左侧色条、--course-text 课程名文字色。
+   全部选「浅底 + 深字」，保证在白色卡片和浅灰页面上都看得清。 */
+.course-color-1 { --course-bg: #e9f0fe; --course-line: #a8c6f7; --course-text: #1a4fa0; }
+.course-color-2 { --course-bg: #e6f6ec; --course-line: #9dd7b4; --course-text: #1c6b3b; }
+.course-color-3 { --course-bg: #fdf1e3; --course-line: #f3cb9b; --course-text: #8a5312; }
+.course-color-4 { --course-bg: #f1ecfd; --course-line: #c8b8f5; --course-text: #533aa8; }
+.course-color-5 { --course-bg: #e4f5f6; --course-line: #a5dade; --course-text: #14666c; }
+.course-color-6 { --course-bg: #fdecf2; --course-line: #f5bcd2; --course-text: #9c2a55; }
+.course-color-7 { --course-bg: #fbf6e0; --course-line: #e6d494; --course-text: #7a6410; }
+.course-color-8 { --course-bg: #eceff5; --course-line: #c2cbd9; --course-text: #3c4a63; }
+
+/* ---------- 今日视图 V1.1：「下一节课」信息条 ---------- */
+.next-card {
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  background: var(--color-brand-weak);
+  border-left: 4px solid var(--color-brand);
+  border-radius: var(--radius-sm);
+}
+
+.next-card__label {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--color-brand);
+}
+
+.next-card__name {
+  margin-top: var(--space-1);
+  font-size: var(--font-lg);
+  font-weight: 600;
+}
+
+.next-card__meta {
+  font-size: var(--font-sm);
+  color: var(--color-text-weak);
+}
+
+/* 今天的课都上完了 */
+.next-card__done {
+  margin-top: var(--space-1);
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+
+/* ---------- 今日视图 V1.1：课程卡片 ---------- */
+.course-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--course-bg, var(--color-surface));
+  border: 1px solid var(--course-line, var(--color-border));
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.course-card + .course-card {
+  margin-top: var(--space-2);
+}
+
+/* 「正在上课」的一条加一圈描边（PRD V1.1 / 验收 B3 要求高亮） */
+.course-card.is-ongoing {
+  box-shadow: 0 0 0 2px var(--course-line, var(--color-brand));
+}
+
+.course-card__main {
+  flex: 1;
+  min-width: 0;            /* 让长课程名能收缩省略，不把右边的状态标签挤出去 */
+}
+
+.course-card__name {
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--course-text, var(--color-text));
+}
+
+.course-card__meta {
+  margin-top: 2px;
+  font-size: var(--font-xs);
+  color: var(--color-text-weak);
+}
+
+/* 状态标签：已结束 / 正在上课 / 未开始 */
+.course-card__status {
+  flex: 0 0 auto;
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  font-size: var(--font-xs);
+  white-space: nowrap;
+}
+
+.course-card__status--ended {
+  background: #eceff2;
+  color: #7b828c;
+}
+
+.course-card__status--ongoing {
+  background: var(--color-brand);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.course-card__status--upcoming {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-weak);
+}
+
+/* ---------- 周视图（V1.6）：周一至周日 × 第 1–12 节 ---------- */
+/* 手机竖屏下 7 列会很挤，所以让这一块自己横向滚动，不影响整页 */
+.week-scroll {
+  overflow-x: auto;
+}
+
+/* 1 列节次 + 7 列星期；行高写死，课程块才能靠 span 精确跨行。
+   1px gap 配合底色画格线，省掉每格的边框。 */
+.week-grid {
+  display: grid;
+  grid-template-columns: 40px repeat(7, minmax(52px, 1fr));
+  grid-template-rows: 28px repeat(12, 46px);
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+/* 左上角空格 + 星期表头 */
+.week-grid__corner,
+.week-grid__head {
+  padding: 4px 0;
+  text-align: center;
+  font-size: var(--font-xs);
+  background: var(--color-surface);
+}
+
+.week-grid__head {
+  color: var(--color-text-weak);
+  font-weight: 600;
+}
+
+/* 今天所在列：表头与空格子都加一层浅蓝（PRD 验收 C1 要求高亮） */
+.week-grid__head.is-today {
+  background: var(--color-brand-weak);
+  color: var(--color-brand);
+}
+
+.week-grid__cell.is-today {
+  background: #f7faff;
+}
+
+/* 节次列（第 1 节…第 12 节）与空格子 */
+.week-grid__period,
+.week-grid__cell {
+  background: var(--color-surface);
+}
+
+.week-grid__period {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-xs);
+  color: var(--color-text-weak);
+}
+
+/* 格子里的课程块：用 grid-row 的 span 跨过它占的节数（验收 C3） */
+.week-grid__course {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 2px 4px;
+  overflow: hidden;
+  background: var(--course-bg);
+  border-left: 3px solid var(--course-line);
+  border-radius: 4px;
+}
+
+.week-grid__course-name {
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--course-text);
+  /* 单行放不下就截断加省略号（PRD V1.6） */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.week-grid__course-loc {
+  font-size: 11px;
+  color: var(--color-text-weak);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ============================================================
    导入页 import.html（P2）

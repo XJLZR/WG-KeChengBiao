@@ -21,24 +21,77 @@
 
   <main class="app-main">
     <!-- ============================================================
-         V1.5 空课表视图（本阶段实现）
-         显示条件：从未导入过课表，一条课程都没有
-         PRD 说：显示空状态引导「先去导入课表」按钮，点击跳到导入页
+         顶部信息条（PRD V1.1 第①项）：第 N 周 · 今天日期 · 当前时间
+         内容由 js/ui-home.js 算出后填入
          ============================================================ -->
-    <section class="card empty-state" id="view-empty">
-      <p class="empty-state__title">还没有课表数据</p>
-      <p class="empty-state__desc">从教务系统导出课表文件，导入后就能看到今天上什么课</p>
-      <a class="btn btn--primary" href="./import.html">去导入课表</a>
+    <section class="weekbar">
+      <span class="weekbar__week" id="weekbar-week">—</span>
+      <span class="weekbar__date" id="weekbar-date">—</span>
     </section>
 
     <!-- ============================================================
-         以下为后续阶段要实现的视图，本阶段先留占位注释，不写代码、不显示
-         - V1.1 今日有课    → T5
-         - V1.2 今日没课    → T5
-         - V1.3 非教学周    → T5
-         - V1.4 本周没课    → T5
-         - V1.6 周视图      → T7
+         视图切换（PRD V1.1 今日视图 ↔ V1.6 周视图）
          ============================================================ -->
+    <div class="view-switch" id="view-switch">
+      <button class="view-switch__btn is-active" type="button" data-view="today">今日</button>
+      <button class="view-switch__btn" type="button" data-view="week">周视图</button>
+    </div>
+
+    <!-- ============================================================
+         今日视图（PRD P1 的 V1.1–V1.5）
+         五个视图同时只显示一个，由 js/ui-home.js 按数据判断后切换。
+         默认让 V1.5（空课表）保持可见：万一是脚本没加载成功，也不至于白屏
+         ============================================================ -->
+    <div class="view" id="view-today">
+
+      <!-- ---------- V1.1 今日有课 ---------- -->
+      <!-- 「下一节课」信息条（PRD V1.1 第②项）；当天课全上完时只显示「今天的课都上完了」 -->
+      <section class="next-card is-hidden" id="next-card">
+        <p class="next-card__label">下一节课</p>
+        <p class="next-card__name" id="next-name"></p>
+        <p class="next-card__meta" id="next-meta"></p>
+        <p class="next-card__done is-hidden" id="next-done">今天的课都上完了</p>
+      </section>
+
+      <!-- 今日课程列表：卡片由 js/ui-home.js 生成 -->
+      <section class="course-list is-hidden" id="course-list"></section>
+
+      <!-- ---------- V1.5 空课表：从未导入过课表 ---------- -->
+      <section class="card empty-state" id="state-empty">
+        <p class="empty-state__title">还没有课表数据</p>
+        <p class="empty-state__desc">从教务系统导出课表文件，导入后就能看到今天上什么课</p>
+        <a class="btn btn--primary" href="./import.html">去导入课表</a>
+      </section>
+
+      <!-- ---------- V1.2 今日没课 ---------- -->
+      <section class="card empty-state is-hidden" id="state-no-today">
+        <p class="empty-state__title">今天没有课</p>
+        <p class="empty-state__desc">今天没有排课</p>
+      </section>
+
+      <!-- ---------- V1.3 非教学周 ---------- -->
+      <section class="card empty-state is-hidden" id="state-off-term">
+        <p class="empty-state__title">还没开学 / 已放假</p>
+        <p class="empty-state__desc">当前日期不在本学期的教学周内</p>
+      </section>
+
+      <!-- ---------- V1.4 本周没课 ---------- -->
+      <section class="card empty-state is-hidden" id="state-no-week">
+        <p class="empty-state__title">本周没有课</p>
+        <p class="empty-state__desc">课表里这一周没有安排课程</p>
+      </section>
+    </div>
+
+    <!-- ============================================================
+         周视图（PRD V1.6）：周一至周日 × 第 1–12 节
+         网格与格子里的课程都由 js/ui-home.js 生成 ——
+         每个格子要标明「第几行第几列」，12 × 8 手写进 HTML 不现实
+         ============================================================ -->
+    <div class="view is-hidden" id="view-week">
+      <div class="week-scroll">
+        <div class="week-grid" id="week-grid"></div>
+      </div>
+    </div>
   </main>
 
   <!-- 底部导航：三个页面共用的跳转入口 -->
@@ -47,6 +100,12 @@
     <a class="app-nav__item" href="./import.html">导入</a>
     <a class="app-nav__item" href="./settings.html">设置</a>
   </nav>
+
+  <!-- 脚本加载顺序不能反：假数据 → 计算 → 界面 -->
+  <!-- mock-data.js 是临时文件，将来接真实数据（T2/T4）时整份删掉 -->
+  <script src="./js/mock-data.js"></script>
+  <script src="./js/schedule.js"></script>
+  <script src="./js/ui-home.js"></script>
 </body>
 
 </html>
