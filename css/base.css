@@ -58,7 +58,6 @@
   --font-sm: 14px;
   --font-md: 16px;
   --font-lg: 20px;
-  --font-xl: 26px;
 
   /* 布局 */
   --header-height: 52px;
@@ -294,11 +293,4 @@ button {
   font-size: var(--font-sm);
   color: var(--color-text-sub);
   margin-bottom: var(--space-5);
-}
-
-/* 小字提示（例如「功能开发中」） */
-.hint {
-  font-size: var(--font-xs);
-  color: var(--color-text-sub);
-  line-height: 1.8;
 }
