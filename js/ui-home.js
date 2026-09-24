@@ -62,6 +62,15 @@ function getCourseColorIndex(name) {
   return (hash % COURSE_COLOR_COUNT) + 1;
 }
 
+/**
+ * 课程配色 class 名（如 "course-color-7"）。
+ * 单独收一层，是因为「course-color- + 编号」这个拼法在今日卡片和周视图课程块里
+ * 各写一遍，改配色规则时容易漏掉一处，两边就不一致了。
+ */
+function getCourseColorClass(name) {
+  return `course-color-${getCourseColorIndex(name)}`;
+}
+
 /** 节次数组 → 中文：如 [1,2] → 第1–2节，[6] → 第6节 */
 function formatPeriods(periods) {
   const min = Math.min(...periods);
@@ -98,13 +107,12 @@ function renderWeekbar(week, now) {
  */
 function renderCourseCard(course, settings, now) {
   const status = getCourseStatus(course, settings, now);
-  const colorIndex = getCourseColorIndex(course.name);
 
   const metaParts = [formatPeriods(course.periods), course.location || '—'];
   if (course.teacher) metaParts.push(course.teacher);   // 教师为空时该位置留空，不放占位符（PRD 5.1）
 
   return (
-    `<article class="course-card course-color-${colorIndex}` +
+    `<article class="course-card ${getCourseColorClass(course.name)}` +
     `${status === 'ongoing' ? ' is-ongoing' : ''}">` +
     `<div class="course-card__main">` +
     `<p class="course-card__name">${escapeHtml(course.name)}</p>` +
@@ -113,6 +121,15 @@ function renderCourseCard(course, settings, now) {
     `<span class="course-card__status course-card__status--${status}">${STATUS_TEXT[status]}</span>` +
     `</article>`
   );
+}
+
+/**
+ * 课程列表组件：一批课程 → 一串卡片 HTML。
+ * 今日视图直接用它；T3 导入预览（「解析出 N 门课」）和 T4 课程管理页
+ * 要列课程时，调的是同一个函数，不用再写一遍「map 一遍再 join」。
+ */
+function renderCourseList(courses, settings, now) {
+  return courses.map((course) => renderCourseCard(course, settings, now)).join('');
 }
 
 /* ---------- 今日视图：五个视图挑一个显示 ---------- */
@@ -162,9 +179,7 @@ function renderTodayView(courses, settings, now) {
 
   if (isTodayView) {
     renderNextCard(getNextCourse(todayCourses, settings, now), settings);
-    document.getElementById('course-list').innerHTML = todayCourses
-      .map((course) => renderCourseCard(course, settings, now))
-      .join('');
+    document.getElementById('course-list').innerHTML = renderCourseList(todayCourses, settings, now);
   }
 }
 
@@ -193,16 +208,31 @@ function renderNextCard(nextCourse, settings) {
 /* ---------- 周视图 ---------- */
 
 /**
- * 生成周视图网格（PRD V1.6）：周一至周日 × 第 1–12 节。
- *
- * 为什么每个格子都要写 style="grid-row:…; grid-column:…"：
- *   连堂课要跨行（PRD 验收 C3：第 1–4 节的课要跨 4 行）。
- *   CSS 的自动排列做不到跨行，必须让每个格子自己声明在第几行第几列。
- *   格子本来就是脚本生成的，把坐标写进 style 不费事。
+ * 周视图里的一个课程块：一列宽，用 grid-row 的 span 跨过它占的节数。
  *
  * ⚠️ 假设：一门课的多个节次是连续的（如 01020304 → 第 1–4 节）。
  *    真实数据若出现「第 1、3 节」这种跳号，这里会把它画成跨 3 行；
  *    要处理得按节次逐段画，属 T2 解析阶段的边界问题。
+ *
+ * 坐标写在 style 里而不是靠 CSS 自动排列：CSS 做不到跨行，
+ * 而连堂课必须跨行（PRD 验收 C3）。格子本来就是脚本生成的，写坐标不费事。
+ */
+function renderWeekCourseBlock(course) {
+  const startPeriod = Math.min(...course.periods);
+  const span = Math.max(...course.periods) - startPeriod + 1;
+
+  return (
+    `<div class="week-grid__course ${getCourseColorClass(course.name)}"` +
+    ` style="grid-row:${startPeriod + 1} / span ${span};grid-column:${course.weekday + 1}">` +
+    `<span class="week-grid__course-name">${escapeHtml(course.name)}</span>` +
+    `<span class="week-grid__course-loc">${escapeHtml(course.location || '—')}</span>` +
+    `</div>`
+  );
+}
+
+/**
+ * 生成周视图网格（PRD V1.6）：周一至周日 × 第 1–12 节。
+ * 课程块本身由 renderWeekCourseBlock() 画，本函数只负责摆格子和表头。
  */
 function renderWeekGrid(courses, week, todayWeekday) {
   const grid = document.getElementById('week-grid');
@@ -243,15 +273,7 @@ function renderWeekGrid(courses, week, todayWeekday) {
 
   // 课程块：一块占一列宽，用 span 跨过它占的节数
   visibleCourses.forEach((course) => {
-    const startPeriod = Math.min(...course.periods);
-    const span = Math.max(...course.periods) - startPeriod + 1;
-    const colorIndex = getCourseColorIndex(course.name);
-    html +=
-      `<div class="week-grid__course course-color-${colorIndex}"` +
-      ` style="grid-row:${startPeriod + 1} / span ${span};grid-column:${course.weekday + 1}">` +
-      `<span class="week-grid__course-name">${escapeHtml(course.name)}</span>` +
-      `<span class="week-grid__course-loc">${escapeHtml(course.location || '—')}</span>` +
-      `</div>`;
+    html += renderWeekCourseBlock(course);
   });
 
   grid.innerHTML = html;
