@@ -3,6 +3,14 @@
    对应：TECH_DESIGN.md 第 2 节「css/pages.css 三个页面的布局与组件样式」
    注意：本文件只放「某个页面专用」的样式，公共部分在 base.css；
          且只放「当前页面骨架真正用到的」样式，后续任务需要的按对应任务再加
+
+   Day 9 前端审查改动（只动样式，未动任何 HTML / JS）：
+     1. 15 处「承载信息」的次要文字从 --color-text-weak 迁到新的 --color-text-sub，
+        另有 1 处硬编码的 #7b828c 一并统一（改前它们在 2.78–3.36:1，低于 AA 的 4.5:1）。
+     2. 课程卡片里「节次 · 地点 · 教师」字号 12px → 14px（产品核心信息，不该最小最淡）。
+     3. 周视图的教室名 11px → 12px，收回 --font-xs 这一档（11px 本来就不在字号系统里）。
+     4. 相邻课程卡片间距 8px → 12px。
+     5. 去掉 .weekbar 与 .page-note 上那 4px 左内边距。
    ============================================================ */
 
 /* ============================================================
@@ -36,7 +44,10 @@
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: 0 var(--space-1) var(--space-3);
+  /* Day 9：原来是 0 var(--space-1) var(--space-3)，左右多了 4px。
+     外层 .app-main 已经有 16px 内边距，这里再加就变成 20px ——
+     于是「第 4 周」比它下面的卡片左边缘多缩进 4px。 */
+  padding: 0 0 var(--space-3);
 }
 
 .weekbar__week {
@@ -46,7 +57,7 @@
 
 .weekbar__date {
   font-size: var(--font-sm);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
 }
 
 /* ---------- 今日 / 周视图切换 ---------- */
@@ -65,7 +76,7 @@
   padding: var(--space-2) 0;
   border-radius: 6px;
   font-size: var(--font-sm);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
 }
 
 .view-switch__btn.is-active {
@@ -77,7 +88,8 @@
 /* ---------- 课程配色：8 套色板 ---------- */
 /* 同一门课每次都是同一个颜色（由 js/ui-home.js 按课程名哈希后取这里的一档）。
    三个变量分工：--course-bg 底色、--course-line 左侧色条、--course-text 课程名文字色。
-   全部选「浅底 + 深字」，保证在白色卡片和浅灰页面上都看得清。 */
+   全部选「浅底 + 深字」，保证在白色卡片和浅灰页面上都看得清。
+   Day 9 实测：8 套的「课程名」全部达标（5.29–7.75:1）。 */
 .course-color-1 { --course-bg: #e9f0fe; --course-line: #a8c6f7; --course-text: #1a4fa0; }
 .course-color-2 { --course-bg: #e6f6ec; --course-line: #9dd7b4; --course-text: #1c6b3b; }
 .course-color-3 { --course-bg: #fdf1e3; --course-line: #f3cb9b; --course-text: #8a5312; }
@@ -110,7 +122,7 @@
 
 .next-card__meta {
   font-size: var(--font-sm);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
 }
 
 /* 今天的课都上完了 */
@@ -133,7 +145,9 @@
 }
 
 .course-card + .course-card {
-  margin-top: var(--space-2);
+  /* Day 9：8px → 12px。改前相邻课程卡片（8px）比大区块之间（12px）还紧，
+     4 张彩底卡片在视觉上糊成一块，分不清是 4 条课还是 1 组。 */
+  margin-top: var(--space-3);
 }
 
 /* 「正在上课」的一条加一圈描边（PRD V1.1 / 验收 B3 要求高亮） */
@@ -154,8 +168,11 @@
 
 .course-card__meta {
   margin-top: 2px;
-  font-size: var(--font-xs);
-  color: var(--color-text-weak);
+  /* Day 9：12px → 14px。
+     这一行是「第几节 · 在哪 · 谁上」——产品要回答的核心问题就是「现在这一节在哪」，
+     改前它却是整张卡片里最小、最淡的字，层级做反了。 */
+  font-size: var(--font-sm);
+  color: var(--color-text-sub);
 }
 
 /* 状态标签：已结束 / 正在上课 / 未开始 */
@@ -167,9 +184,11 @@
   white-space: nowrap;
 }
 
+/* Day 9：改前是 #7b828c 压在 #eceff2 上，只有 3.36:1。
+   现在用统一的次要文字色，在同样的灰底上是 4.70:1。 */
 .course-card__status--ended {
   background: #eceff2;
-  color: #7b828c;
+  color: var(--color-text-sub);
 }
 
 .course-card__status--ongoing {
@@ -181,7 +200,7 @@
 .course-card__status--upcoming {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
 }
 
 /* ---------- 周视图（V1.6）：周一至周日 × 第 1–12 节 ---------- */
@@ -213,7 +232,7 @@
 }
 
 .week-grid__head {
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
   font-weight: 600;
 }
 
@@ -238,7 +257,7 @@
   align-items: center;
   justify-content: center;
   font-size: var(--font-xs);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
 }
 
 /* 格子里的课程块：用 grid-row 的 span 跨过它占的节数（验收 C3） */
@@ -265,8 +284,10 @@
 }
 
 .week-grid__course-loc {
-  font-size: 11px;
-  color: var(--color-text-weak);
+  /* Day 9：11px → var(--font-xs) 的 12px。
+     11px 不在 12/14/16/20/26 这个字号系统的任何一档里，属于漏网的硬编码值。 */
+  font-size: var(--font-xs);
+  color: var(--color-text-sub);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -313,7 +334,7 @@
 
 .state-loading__text {
   font-size: var(--font-sm);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
 }
 
 /* ---------- V1.8 读取失败 ---------- */
@@ -405,7 +426,7 @@
 }
 
 .setting-row__value {
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
   font-size: var(--font-sm);
 }
 
@@ -419,8 +440,8 @@
 /* 页面底部的说明文字（导入页 / 设置页共用） */
 .page-note {
   margin-top: var(--space-4);
-  padding: 0 var(--space-1);
+  /* Day 9：删掉了 padding: 0 var(--space-1) 里的 4px，与 .section-title 同理。 */
   font-size: var(--font-xs);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
   line-height: 1.8;
 }

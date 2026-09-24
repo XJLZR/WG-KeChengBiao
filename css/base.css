@@ -3,6 +3,14 @@
    内容：CSS 变量、样式重置、字体、通用间距、页头 / 页脚导航
    对应：TECH_DESIGN.md 第 2 节「css/base.css 变量、重置、字体、通用间距」
    注意：本文件只放「三个页面都要用的东西」，页面各自的布局放 pages.css
+
+   Day 9 前端审查改动（只动样式，未动任何 HTML / JS）：
+     1. 文字灰从一档拆成两档：新增 --color-text-sub（承载信息的次要文字），
+        原来的 --color-text-weak 改派给「非活动控件」。
+     2. 主色 #2f6fed → #2a63d6（原因见下面 :root 里的注释）。
+     3. 补上按钮的 disabled / hover / active / focus-visible 四种状态（改前一条都没有）。
+     4. 去掉 .section-title 上那 4px 左内边距，消掉两条左基准线。
+     5. .card + .card 的间距 12px → 16px，让「区块之间」比「卡片之间」更松。
    ============================================================ */
 
 /* ---------- 1. 设计变量（颜色、字号、间距都从这里取） ---------- */
@@ -12,8 +20,25 @@
   --color-surface: #ffffff;      /* 卡片底色 */
   --color-border: #e3e5e9;       /* 分隔线 / 边框 */
   --color-text: #1f2329;         /* 主文字 */
-  --color-text-weak: #8a9099;    /* 次要文字 */
-  --color-brand: #2f6fed;        /* 主色（按钮、选中态） */
+
+  /* ---- 文字灰分两档（Day 9 定，改前只有一档 #8a9099）----
+     · --color-text-sub  次要文字。凡是「用户要读的信息」都用它：节次、地点、教师、
+       日期时间、状态标签、周视图表头、导航标签……它在所有用到的底色上实测 ≥4.6:1，
+       过 WCAG AA 的 4.5:1。
+     · --color-text-weak 装饰级灰。按 WCAG 2.1，非活动控件（disabled 按钮）里的
+       文字不受 4.5:1 约束，所以这一档只允许给 :disabled 的文字用，不得承载信息。
+       改前它被当成「次要文字」用了 15 处（另有 1 处 #7b828c 是手写同一个意思），
+       实测只有 2.78–3.36:1 —— 26 处检查里 17 处不达标，其中 15 处出自这一档。 */
+  --color-text-sub: #5f6b7a;
+  --color-text-weak: #8a9099;
+
+  /* ---- 主色（Day 9 压深一档）----
+     改前是 #2f6fed。它自己在 #ffffff 上（导航选中、返回链接）只有 4.55:1，
+     勉强过线；压在浅蓝底 --color-brand-weak 上当文字色时（视图切换选中、
+     「下一节课」标签、导入页步骤序号）只有 4.01:1，不达标。
+     同色相压深到 #2a63d6 之后：浅蓝底上 4.80:1、白底上 5.45:1、
+     白字压在它上面的主要按钮也从 4.55:1 提到 5.45:1。色相没变，肉眼几乎看不出差别。 */
+  --color-brand: #2a63d6;
   --color-brand-weak: #eaf1fe;   /* 主色浅底 */
 
   /* 间距 */
@@ -136,12 +161,17 @@ button {
   text-align: center;
   padding: var(--space-3) 0;
   font-size: var(--font-xs);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
 }
 
 .app-nav__item.is-active {
   color: var(--color-brand);
   font-weight: 600;
+}
+
+/* Day 9 新增：手指按下时给一点反馈，否则点了像没点到 */
+.app-nav__item:active {
+  background: var(--color-brand-weak);
 }
 
 /* ---------- 6. 通用组件：卡片、分区标题、按钮、空状态 ---------- */
@@ -154,31 +184,50 @@ button {
   padding: var(--space-4);
 }
 
+/* 间距节奏（Day 9 统一成两级）：
+   区块之间 16px，同一组内的小卡片之间 12px。
+   改前是「区块之间 12px、相邻课程卡片 8px」—— 结果卡片比区块还紧，列表看着黏成一坨。 */
 .card + .card {
-  margin-top: var(--space-3);
+  margin-top: var(--space-4);
 }
 
 /* 分区小标题 */
 .section-title {
   font-size: var(--font-xs);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
   margin-bottom: var(--space-2);
-  padding-left: var(--space-1);
+  /* Day 9：删掉了这里的 padding-left: var(--space-1)。
+     它让分区标题比同一张卡片里的正文右移 4px；加上 .weekbar / .page-note 上
+     同样的写法，页面上出现了「16px 和 20px」两条左基准线。 */
 }
 
-/* 主要按钮 */
+/* ---------- 按钮：外观 + 四种状态 ---------- */
+/* Day 9 之前，下面这组规则只有「长什么样」，没有「状态」：
+   :hover / :active / :focus / :disabled 一条都没有。
+   后果是导入页那个 disabled 的「选择课表文件」和能点的按钮长得一模一样。 */
 .btn {
   display: inline-block;
   padding: var(--space-3) var(--space-5);
   border-radius: var(--radius-sm);
   font-size: var(--font-sm);
   text-align: center;
+  /* 状态切换要有过渡，否则鼠标移上去是「跳」的一下 */
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
+/* 主要按钮 */
 .btn--primary {
   background: var(--color-brand);
   color: #ffffff;
   font-weight: 600;
+}
+
+.btn--primary:hover {
+  background: #2455bd;
+}
+
+.btn--primary:active {
+  background: #1e479c;
 }
 
 /* 次要按钮：白底带边框 */
@@ -186,6 +235,47 @@ button {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   color: var(--color-text);
+}
+
+.btn--ghost:hover {
+  background: #f7f8fa;
+}
+
+.btn--ghost:active {
+  background: #eef0f4;
+}
+
+/* 不可点状态。
+   为什么文字色用最浅的 --color-text-weak：WCAG 2.1 对「非活动控件里的文字」
+   明确不设 4.5:1 要求，禁用态的常规做法本来就是压到最浅；
+   更关键的是「能不能点」此时由底色、边框和 not-allowed 光标三者共同表达，不靠文字色。 */
+.btn:disabled,
+.btn:disabled:hover,
+.btn:disabled:active {
+  cursor: not-allowed;
+  background: #f2f3f6;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-weak);
+  font-weight: 400;
+  box-shadow: none;
+}
+
+/* 键盘焦点。
+   改前全站没有任何焦点样式，按 Tab 键走一遍完全看不出停在哪一格。
+   用 :focus-visible 而不是 :focus —— 鼠标点击不出光圈，只有键盘导航才出。 */
+.btn:focus-visible,
+.app-nav__item:focus-visible,
+.app-header__back:focus-visible,
+.view-switch__btn:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* 用户在系统里开了「减少动态效果」就不做过渡 */
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+  }
 }
 
 /* 空状态区块：一个居中的提示 + 可选的按钮 */
@@ -202,13 +292,13 @@ button {
 
 .empty-state__desc {
   font-size: var(--font-sm);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
   margin-bottom: var(--space-5);
 }
 
 /* 小字提示（例如「功能开发中」） */
 .hint {
   font-size: var(--font-xs);
-  color: var(--color-text-weak);
+  color: var(--color-text-sub);
   line-height: 1.8;
 }
