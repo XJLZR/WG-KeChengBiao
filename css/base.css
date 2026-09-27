@@ -11,6 +11,12 @@
      3. 补上按钮的 disabled / hover / active / focus-visible 四种状态（改前一条都没有）。
      4. 去掉 .section-title 上那 4px 左内边距，消掉两条左基准线。
      5. .card + .card 的间距 12px → 16px，让「区块之间」比「卡片之间」更松。
+
+   Day 10 改动（导航条挪到内容区顶部，动了三个页面的 HTML + 本文件）：
+     .app-nav 从「fixed 贴死视口底边」改为普通文档流里的顶部容器。
+     原因：贴底导航依赖「视口底边可见」——电脑上窗口底边被 Windows 任务栏
+     压住时，导航条会跟着被挡（Day 10 主人实测「有时候被挡」）；
+     挪到顶部后不再依赖窗口底边。样式与「今日 / 周视图」切换器一致（主人拍板）。
    ============================================================ */
 
 /* ---------- 1. 设计变量（颜色、字号、间距都从这里取） ---------- */
@@ -138,32 +144,40 @@ button {
   max-width: var(--content-max);
   margin: 0 auto;
   padding: var(--space-4);
-  /* 给底部导航留出空间，否则内容会被导航条压住 */
-  padding-bottom: 96px;
+  /* Day 10：删掉了 padding-bottom: 96px —— 它是给「贴死视口底边的固定导航」
+     让位用的；导航挪进文档流顶部后，内容不会再被它压住。 */
 }
 
-/* ---------- 5. 底部导航（三个页面共用） ---------- */
+/* ---------- 5. 页面导航（三个页面共用） ----------
+   Day 10 起放在页头下方、内容区顶部（HTML 里在 <main> 之前）。
+   容器外观与首页「今日 / 周视图」切换器（.view-switch）一致：
+   白底 + 1px 边框 + 8px 圆角，内部三个等宽按钮。
+   宽度对齐：width = 视口宽减去左右各 16px，与 .app-main 的内容区同宽；
+   窗口宽过 720px 后由 max-width 定在 688px（720 − 32），margin: auto 居中。 */
 .app-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
   display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  width: calc(100% - var(--space-4) * 2);
+  max-width: calc(var(--content-max) - var(--space-4) * 2);
+  margin: var(--space-4) auto 0;
   background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  /* 适配带小横条的全面屏手机 */
-  padding-bottom: env(safe-area-inset-bottom);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 
 .app-nav__item {
   flex: 1;
   text-align: center;
-  padding: var(--space-3) 0;
-  font-size: var(--font-xs);
+  padding: var(--space-2) 0;
+  border-radius: 6px;
+  font-size: var(--font-sm);
   color: var(--color-text-sub);
 }
 
+/* 选中态与「今日 / 周视图」切换器的选中按钮一致：浅蓝底 + 主色字 */
 .app-nav__item.is-active {
+  background: var(--color-brand-weak);
   color: var(--color-brand);
   font-weight: 600;
 }

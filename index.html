@@ -19,6 +19,15 @@
     <h1 class="app-header__title">WG课程表</h1>
   </header>
 
+  <!-- 页面导航：三个页面共用的跳转入口（Day 10 从视口底部挪到这里：
+       贴底的固定条会被 Windows 任务栏 / 手机手势条压住，顶部不依赖窗口底边；
+       样式与下方「今日 / 周视图」切换器一致） -->
+  <nav class="app-nav">
+    <a class="app-nav__item is-active" href="./index.html">今日</a>
+    <a class="app-nav__item" href="./import.html">导入</a>
+    <a class="app-nav__item" href="./settings.html">设置</a>
+  </nav>
+
   <main class="app-main">
     <!-- ============================================================
          顶部信息条（PRD V1.1 第①项）：第 N 周 · 今天日期 · 当前时间
@@ -116,13 +125,6 @@
       <button class="btn btn--primary" type="button" id="state-error-retry">重试</button>
     </section>
   </main>
-
-  <!-- 底部导航：三个页面共用的跳转入口 -->
-  <nav class="app-nav">
-    <a class="app-nav__item is-active" href="./index.html">今日</a>
-    <a class="app-nav__item" href="./import.html">导入</a>
-    <a class="app-nav__item" href="./settings.html">设置</a>
-  </nav>
 
   <!-- 脚本加载顺序不能反：假数据 → 计算 → 界面 -->
   <!-- mock-data.js 是临时文件，将来接真实数据（T2/T4）时整份删掉 -->
