@@ -35,7 +35,13 @@
          ============================================================ -->
     <section class="weekbar" id="weekbar">
       <span class="weekbar__week" id="weekbar-week">—</span>
-      <span class="weekbar__date" id="weekbar-date">—</span>
+      <!-- Day 11：右侧「日期 + 刷新按钮」组。
+           weekbar 是两端对齐布局，直接塞第三个元素会被挤到中间，
+           所以包进一个右侧容器：日期照旧贴着按钮，「第 N 周」贴左不变 -->
+      <div class="weekbar__right">
+        <span class="weekbar__date" id="weekbar-date">—</span>
+        <button class="btn btn--ghost weekbar__refresh" type="button" id="refresh-btn">刷新</button>
+      </div>
     </section>
 
     <!-- ============================================================
@@ -127,6 +133,9 @@
   </main>
 
   <!-- 脚本加载顺序不能反：假数据 → 计算 → 界面 -->
+  <!-- Day 11：ui-modal.js 是状态弹窗组件，ui-home.js 的刷新流程要用它，
+       必须排在 ui-home.js 之前 -->
+  <script src="./js/ui-modal.js"></script>
   <!-- mock-data.js 是临时文件，将来接真实数据（T2/T4）时整份删掉 -->
   <script src="./js/mock-data.js"></script>
   <script src="./js/schedule.js"></script>

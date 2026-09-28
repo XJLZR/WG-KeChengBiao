@@ -17,6 +17,11 @@
      原因：贴底导航依赖「视口底边可见」——电脑上窗口底边被 Windows 任务栏
      压住时，导航条会跟着被挡（Day 10 主人实测「有时候被挡」）；
      挪到顶部后不再依赖窗口底边。样式与「今日 / 周视图」切换器一致（主人拍板）。
+
+   Day 11 改动（末尾新增「状态弹窗」一节，未动任何已有规则）：
+     为 Day 11 的上传 / 刷新状态交互提供弹窗外观：遮罩 + 居中卡片 + 三态图标
+     （对勾 / 叉 / 转圈全用 CSS 画，不引图片，项目惯例）+ 出现动效。
+     DOM 由 js/ui-modal.js 动态创建；隐藏复用 pages.css 顶部的全局 .is-hidden。
    ============================================================ */
 
 /* ---------- 1. 设计变量（颜色、字号、间距都从这里取） ---------- */
@@ -307,4 +312,146 @@ button {
   font-size: var(--font-sm);
   color: var(--color-text-sub);
   margin-bottom: var(--space-5);
+}
+
+/* ---------- 7. 状态弹窗（Day 11 新增） ----------
+   上传 / 刷新的「加载中、成功、失败」提示，三个页面共用。
+   DOM 由 js/ui-modal.js 动态创建后插到 body 末尾，本文件只管外观。
+   隐藏用的 .is-hidden 来自 pages.css 顶部（三个页面都加载它）。 */
+
+/* 全屏遮罩：盖住页面（sticky 页头 z-index 是 10，遮罩取 100 压住它）。
+   点击会落在遮罩上、再冒泡到 document —— ui-modal.js 的「点任意处关闭」
+   哨兵就是在 document 那一层收到的。 */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 小屏幕上让卡片离屏幕边缘至少 16px */
+  padding: var(--space-4);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+/* 弹窗卡片。
+   入场动效：display 从 none 变 flex 时 animation 会自动重播，
+   所以每次弹窗出现都会淡入 + 上浮 8px —— 「可感知反馈」的动效部分。 */
+.modal-card {
+  width: 100%;
+  max-width: 320px;
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  text-align: center;
+  animation: modal-card-in 0.2s ease both;
+}
+
+@keyframes modal-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- 图标：三种状态，全用 CSS 画 ---------- */
+.modal-card__icon {
+  position: relative;      /* 失败态伪元素（叉）的定位基准 */
+  display: block;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto var(--space-3);
+  border-radius: 50%;
+}
+
+/* 加载中：灰圈 + 主色圆弧 + 旋转，画法与 pages.css 的 V1.7 spinner 一致 */
+.modal-card--loading .modal-card__icon {
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-brand);
+  animation: modal-icon-spin 0.8s linear infinite;
+}
+
+@keyframes modal-icon-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 成功：绿底白勾。
+   绿取课程配色 2 的文字色（项目里已有的绿，不新造颜色）；
+   白勾就是一个旋转 -45° 的「L」：左边框 + 下边框。 */
+.modal-card--success .modal-card__icon {
+  background: #1c6b3b;
+}
+
+.modal-card--success .modal-card__icon::after {
+  content: '';
+  display: block;
+  width: 12px;
+  height: 6px;
+  margin: 15px auto 0;
+  border-left: 2.5px solid #ffffff;
+  border-bottom: 2.5px solid #ffffff;
+  transform: rotate(-45deg);
+}
+
+/* 失败：红底白叉。红与 V1.8 错误标题、.btn--danger 是同一支 #b3352b。 */
+.modal-card--error .modal-card__icon {
+  background: #b3352b;
+}
+
+.modal-card--error .modal-card__icon::before,
+.modal-card--error .modal-card__icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 2.5px;
+  background: #ffffff;
+  border-radius: 1px;
+}
+
+.modal-card--error .modal-card__icon::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.modal-card--error .modal-card__icon::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+/* ---------- 弹窗文字 ---------- */
+.modal-card__title {
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+
+.modal-card__desc {
+  margin-top: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--color-text-sub);
+  /* 文件名可能很长：让它折行，不把卡片撑破 */
+  overflow-wrap: anywhere;
+}
+
+.modal-card__hint {
+  margin-top: var(--space-3);
+  font-size: var(--font-xs);
+  color: var(--color-text-sub);
+}
+
+/* 用户在系统里开了「减少动态效果」就全静止：
+   卡片不播入场动画，加载圈不转（留一个静止的圈，与 V1.7 的处理一致） */
+@media (prefers-reduced-motion: reduce) {
+  .modal-card {
+    animation: none;
+  }
+
+  .modal-card--loading .modal-card__icon {
+    animation: none;
+  }
 }

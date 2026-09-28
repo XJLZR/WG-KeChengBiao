@@ -48,11 +48,22 @@
       </ol>
 
       <div class="action-row">
-        <!-- 注：解析逻辑属 T2/T3，本阶段按钮不绑定行为 -->
-        <button class="btn btn--primary" type="button" disabled>选择课表文件</button>
+        <!-- Day 11：按钮接上「上传状态反馈」（前端临时状态：只看扩展名、不解析内容）。
+             真正的文件解析属 T2/T3，到时替换 js/ui-import.js 里的模拟分支。 -->
+        <button class="btn btn--primary" type="button" id="import-select-btn">选择课表文件</button>
         <a class="btn btn--ghost" href="./settings.html">先去看看设置</a>
+        <!-- 隐藏的文件选择框：由上面的按钮代它打开（见 js/ui-import.js）。
+             ⚠️ 故意不设 accept 过滤（Day 11 测试中发现的问题）：
+             设了的话浏览器会把非 .htm 文件直接藏出选择框，用户「想选错都选不到」，
+             「上传失败」这条反馈就永远看不到，只会在空荡荡的选择框里困惑。
+             让所有文件都可选，失败交给 js/ui-import.js 的扩展名校验去弹。
+             T2/T3 接真解析时再把 accept 加回来，那时的失败由解析结果决定。 -->
+        <input type="file" id="import-file-input" hidden>
       </div>
-      <p class="page-note">导入功能尚未接入，当前为页面骨架（对应 PRD 第 7 节 T1）。</p>
+      <p class="page-note">
+        「上传加载中 / 成功 / 失败」是 Day 11 新加的状态反馈演示：
+        不解析文件内容、不保存数据；真正的导入功能属后续任务（T2–T4）。
+      </p>
     </section>
 
     <!-- ============================================================
@@ -62,6 +73,10 @@
          - V2.4 课程管理（新增 / 修改 / 删除）→ T4
          ============================================================ -->
   </main>
+
+  <!-- Day 11 状态弹窗：先加载弹窗组件、再加载导入页交互，顺序不能反 -->
+  <script src="./js/ui-modal.js"></script>
+  <script src="./js/ui-import.js"></script>
 </body>
 
 </html>

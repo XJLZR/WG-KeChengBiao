@@ -428,7 +428,66 @@ function initRetryButton() {
   btn.addEventListener('click', bootstrap);
 }
 
+/* ---------- 刷新课表（Day 11 新增） ---------- */
+
+/* 模拟刷新耗时：太短弹窗一闪而过，太长像卡死，取 1.2 秒 */
+const REFRESH_DELAY_MS = 1200;
+
+/* 处理期间防连点：disabled 管 UI，这个标志管逻辑（与导入页同一套做法） */
+let isRefreshing = false;
+
+/**
+ * 刷新 = 重新读数据 + 重新渲染（复用 readLocalData / renderPage / showReadError）。
+ *
+ * 流程（Day 11 任务）：点「刷新」→ 立刻弹「刷新中」（按钮同时禁用）→
+ * 约 1.2 秒后按读取结果弹「刷新成功 / 刷新失败」。
+ *
+ * ⚠️ 为什么不复用 bootstrap()：bootstrap 把读取失败 catch 在内部、转成页面级
+ *    V1.8 错误页，调用方拿不到「成功还是失败」——用它的话，读取失败也会弹
+ *    「刷新成功」，弹窗就说了谎。这里自己 try/catch，成败才能分流到两个弹窗。
+ *
+ * ⚠️ 演示版（Day 11 拍板的 B 方案）：mock 数据是同步返回、必成功，
+ *    catch 分支今天到不了（失败弹窗代码已写好、不触发）；
+ *    T4 接上真实存储后，readLocalData 失败会真的抛错，这个分支自然生效。
+ */
+function initRefreshButton() {
+  const btn = document.getElementById('refresh-btn');
+  if (!btn) return;
+
+  btn.addEventListener('click', () => {
+    if (isRefreshing) return;
+
+    isRefreshing = true;
+    btn.disabled = true;
+    showStatusModal({ type: 'loading', title: '正在刷新课表…' });
+
+    setTimeout(async () => {
+      try {
+        const data = await readLocalData();
+        renderPage(data.courses, data.settings);
+        showStatusModal({
+          type: 'success',
+          title: '刷新成功',
+          desc: '课表已按当前数据重新计算。',
+        });
+      } catch (error) {
+        /* 读取失败：页面交给 V1.8 错误页，弹窗再补一句可理解的失败提示 */
+        showReadError(error);
+        showStatusModal({
+          type: 'error',
+          title: '刷新失败',
+          desc: '没能重新读取课表，请稍后再试。',
+        });
+      }
+
+      isRefreshing = false;
+      btn.disabled = false;
+    }, REFRESH_DELAY_MS);
+  });
+}
+
 /* 页面加载时：先接好「不需要数据」的线，再走一次读取流程 */
 initViewSwitch();
 initRetryButton();
+initRefreshButton();
 bootstrap();

@@ -11,6 +11,11 @@
      3. 周视图的教室名 11px → 12px，收回 --font-xs 这一档（11px 本来就不在字号系统里）。
      4. 相邻课程卡片间距 8px → 12px。
      5. 去掉 .weekbar 与 .page-note 上那 4px 左内边距。
+
+   Day 11 改动（未动任何已有规则）：
+     首页 weekbar 新增右侧「日期 + 刷新按钮」组：.weekbar__right（两端对齐下
+     把日期和按钮收进右侧容器，避免第三个元素被挤到正中间）与 .weekbar__refresh
+     （复用 base.css 的 .btn--ghost，只收小 padding）。刷新流程见 js/ui-home.js。
    ============================================================ */
 
 /* ============================================================
@@ -58,6 +63,21 @@
 .weekbar__date {
   font-size: var(--font-sm);
   color: var(--color-text-sub);
+}
+
+/* Day 11 新增：右侧「日期 + 刷新按钮」组。
+   .weekbar 是 space-between 两端对齐，直接塞第三个元素会被挤到正中间，
+   所以把日期和按钮包进一个右侧容器——「第 N 周」贴左的布局不变。 */
+.weekbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* 小号 ghost 刷新按钮：复用 .btn--ghost 的外观和状态样式，
+   只把 padding 收小（默认 12px 24px 会把顶部信息条这行撑高太多） */
+.weekbar__refresh {
+  padding: 4px 12px;
 }
 
 /* ---------- 今日 / 周视图切换 ---------- */
