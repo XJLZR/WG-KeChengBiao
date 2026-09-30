@@ -5,6 +5,9 @@
    分层约定（TECH_DESIGN 第 2 节）：界面层只调用 schedule.js 这类逻辑函数，
    不直接碰 IndexedDB 或 localStorage。所有「算」的活都在 schedule.js，
    本文件只管「把算出来的东西画到页面上」。
+
+   Day 12 新增「本周课程搜索」：筛选条 + 搜索结果区（见下方同名一节）。
+   它搜的是整周的课，所以筛选条挂在两个视图外面（index.html 里在视图切换器下方）。
    ============================================================ */
 
 /* 星期名称：下标 0 对应周一，与 Course.weekday（1–7，1 = 周一）差 1 */
@@ -22,8 +25,11 @@ const LOADING_DELAY_MS = 250;
 /* 首页级过程状态的容器 id（PRD V1.7 / V1.8）：同一时间最多显示一个 */
 const PAGE_STATE_IDS = ['state-loading', 'state-error'];
 
-/* 读取成功时才显示的正常内容 —— 过程状态出现时，这些全部藏起来 */
-const NORMAL_IDS = ['weekbar', 'view-switch', 'view-today', 'view-week'];
+/* 读取成功时才显示的正常内容 —— 过程状态出现时，这些全部藏起来。
+   Day 12 把筛选条与搜索结果区也归进「正常内容」：读取中 / 读取失败时
+   必须一起藏掉，否则它们会残留在错误页上方。
+   至于正常态里具体显示哪几块，交由 applyDisplayState() 细分。 */
+const NORMAL_IDS = ['weekbar', 'view-switch', 'course-filter', 'search-panel', 'view-today', 'view-week'];
 
 /* 状态标签的中文。内部用英文代号，显示时才翻译（TECH_DESIGN 6.1：
    「用户看懂的，和开发看懂的，分开」） */
@@ -104,21 +110,40 @@ function renderWeekbar(week, now) {
  * 生成一张课程卡片（PRD V1.1 第③项里的「每条」）。
  * 单独抽成函数就是为了可复用：课程管理页（T4）、以后周视图点开的详情，
  * 都能直接用同一张卡片。
+ *
+ * options.showWeekday（Day 12，搜索结果专用）打开后：
+ *   ① 卡片上方多一行星期标签 —— 结果跨天，只说「第 3–4 节」不知道是星期几；
+ *   ② 不显示「已结束 / 正在上课 / 未开始」—— 那套状态是拿「此刻」算的，
+ *      套在别的星期的课上会答错（周四去搜周三的课，它必然显示「已结束」，
+ *      这个结论对用户毫无意义）。
  */
-function renderCourseCard(course, settings, now) {
-  const status = getCourseStatus(course, settings, now);
+function renderCourseCard(course, settings, now, options) {
+  const opts = options || {};
+  const isSearchResult = Boolean(opts.showWeekday);
 
   const metaParts = [formatPeriods(course.periods), course.location || '—'];
   if (course.teacher) metaParts.push(course.teacher);   // 教师为空时该位置留空，不放占位符（PRD 5.1）
 
+  const weekdayTag = isSearchResult
+    ? `<p class="course-card__weekday">${WEEKDAY_NAMES[course.weekday - 1]}</p>`
+    : '';
+
+  let ongoingCls = '';
+  let statusTag = '';
+  if (!isSearchResult) {
+    const status = getCourseStatus(course, settings, now);
+    ongoingCls = status === 'ongoing' ? ' is-ongoing' : '';
+    statusTag = `<span class="course-card__status course-card__status--${status}">${STATUS_TEXT[status]}</span>`;
+  }
+
   return (
-    `<article class="course-card ${getCourseColorClass(course.name)}` +
-    `${status === 'ongoing' ? ' is-ongoing' : ''}">` +
+    `<article class="course-card ${getCourseColorClass(course.name)}${ongoingCls}">` +
     `<div class="course-card__main">` +
+    weekdayTag +
     `<p class="course-card__name">${escapeHtml(course.name)}</p>` +
     `<p class="course-card__meta">${escapeHtml(metaParts.join(' · '))}</p>` +
     `</div>` +
-    `<span class="course-card__status course-card__status--${status}">${STATUS_TEXT[status]}</span>` +
+    statusTag +
     `</article>`
   );
 }
@@ -127,9 +152,10 @@ function renderCourseCard(course, settings, now) {
  * 课程列表组件：一批课程 → 一串卡片 HTML。
  * 今日视图直接用它；T3 导入预览（「解析出 N 门课」）和 T4 课程管理页
  * 要列课程时，调的是同一个函数，不用再写一遍「map 一遍再 join」。
+ * options 一路传给 renderCourseCard（Day 12 后被搜索结果复用）。
  */
-function renderCourseList(courses, settings, now) {
-  return courses.map((course) => renderCourseCard(course, settings, now)).join('');
+function renderCourseList(courses, settings, now, options) {
+  return courses.map((course) => renderCourseCard(course, settings, now, options)).join('');
 }
 
 /* ---------- 今日视图：五个视图挑一个显示 ---------- */
@@ -285,17 +311,35 @@ function renderWeekGrid(courses, week, todayWeekday) {
 let activeView = 'today';
 
 /**
- * 按 activeView 显示对应的视图容器。
- * 单独抽出来是因为「读取过程结束、恢复正常内容」时也要重新显示一次。
+ * 把「正常态下该显示哪几块」一次算清楚。
+ *
+ * 为什么收在一个函数里：现在三个维度会互相牵扯，分开判断必然打架 ——
+ *   ① 搜索态：有搜索词时只显示搜索结果区，今日视图与周视图都藏起来；
+ *   ② 视图态：没在搜索时，按 activeView 显示今日或周视图；
+ *   ③ 筛选条：本周有课才给（空课表 / 假期 / 本周无课时不显示，没什么可搜的）。
+ * 读取中与读取失败不在这里判断 —— showPageState() 会先把正常内容整体藏掉。
+ *
+ * Day 12 之前这个函数只管 ②，那时叫 applyView()。
  */
-function applyView() {
-  document.getElementById('view-today').classList.toggle('is-hidden', activeView !== 'today');
-  document.getElementById('view-week').classList.toggle('is-hidden', activeView !== 'week');
+function applyDisplayState() {
+  const isSearching = searchKeyword !== '';
+
+  document.getElementById('view-today').classList.toggle('is-hidden', isSearching || activeView !== 'today');
+  document.getElementById('view-week').classList.toggle('is-hidden', isSearching || activeView !== 'week');
+  document.getElementById('search-panel').classList.toggle('is-hidden', !isSearching);
+
+  /* 筛选条要等数据到手才算得出「本周有没有课」；还没读到数据就先藏起来 */
+  let hasWeekCourses = false;
+  if (currentCourses && currentSettings) {
+    const week = getWeekNumber(currentSettings, new Date());
+    hasWeekCourses = week !== null && getCoursesOfWeek(currentCourses, week).length > 0;
+  }
+  document.getElementById('course-filter').classList.toggle('is-hidden', !hasWeekCourses);
 }
 
 /**
  * 「今日 / 周视图」切换。
- * 按钮上写 data-view="today" / "week"，与 applyView() 的判断一一对应，
+ * 按钮上写 data-view="today" / "week"，与 applyDisplayState() 的判断一一对应，
  * 按钮值改了就自动对上，不需要写 if 分支。
  */
 function initViewSwitch() {
@@ -308,12 +352,126 @@ function initViewSwitch() {
 
     activeView = btn.dataset.view;
 
+    /* 点视图切换器 = 「我要看视图」，顺手退出搜索态。
+       不这么做的话这一下点了毫无反应（结果区盖在视图上），看着像坏了。 */
+    if (searchKeyword !== '') {
+      searchKeyword = '';
+      const input = document.getElementById('filter-input');
+      if (input) input.value = '';
+    }
+
     // 按钮：只高亮被点的那一个
     switchBox.querySelectorAll('.view-switch__btn').forEach((b) => {
       b.classList.toggle('is-active', b === btn);
     });
 
-    applyView();
+    applyDisplayState();
+  });
+}
+
+/* ---------- 本周课程搜索（Day 12） ----------
+   搜的是「本周」的课，不是只有今天。三个要点：
+     ① 匹配范围：课程名 / 地点 / 教师，任意一个命中就算
+     ② 排序：先星期（周一在前），同一天里按节次从早到晚
+     ③ 搜索态与视图态互斥：有搜索词时今日视图、周视图都藏起来
+   搜索结果复用 renderCourseList()，所以卡片样式与今日列表完全一致。
+   ------------------------------------------------------------------ */
+
+/* 当前搜索词。空字符串 = 没在搜索，页面按「今日 / 周视图」显示 */
+let searchKeyword = '';
+
+/* 最近一次读到的数据。
+   搜索是「敲一个字就重算一次」，输入事件里拿不到 bootstrap() 的局部变量，
+   所以渲染完成后把数据留在模块级，供搜索与筛选条判断使用。 */
+let currentCourses = null;
+let currentSettings = null;
+
+/**
+ * 按关键词筛课程：课程名 / 地点 / 教师三个字段任意命中就算，忽略大小写。
+ * 数据量是「一周几十条」，纯字符串比较就够，不需要防抖，也不需要索引。
+ */
+function filterCoursesByKeyword(courses, keyword) {
+  const key = keyword.trim().toLowerCase();
+  if (key === '') return [];
+
+  return courses.filter((course) => {
+    const haystack = `${course.name} ${course.location} ${course.teacher}`.toLowerCase();
+    return haystack.includes(key);
+  });
+}
+
+/** 搜索结果排序：先星期（周一在前），同一天内按节次从早到晚 */
+function sortSearchResults(courses) {
+  return courses.slice().sort((a, b) => {
+    if (a.weekday !== b.weekday) return a.weekday - b.weekday;
+    return Math.min(...a.periods) - Math.min(...b.periods);
+  });
+}
+
+/**
+ * 按当前的 searchKeyword 把搜索结果画一遍（不改搜索词）。
+ * 单独抽出来是因为「刷新课表」之后数据变了，结果也要跟着重画一次。
+ *
+ * ⚠️ 结果是 0 条时显示的是「本周没有匹配的课程」，不是 V1.2「今天没有课」——
+ *    前者是「有课、被筛掉了」，后者是「今天确实没排课」，含义不同不能混用。
+ */
+function renderSearchPanel() {
+  const countEl = document.getElementById('search-count');
+  const listEl = document.getElementById('search-list');
+  const noMatchEl = document.getElementById('state-no-match');
+  if (!countEl || !listEl || !noMatchEl) return;
+
+  const now = new Date();
+  const week = getWeekNumber(currentSettings, now);
+
+  /* 搜索范围 = 本周：不在本周的课不参与匹配（非教学周时 week 为 null，结果自然是空） */
+  const weekCourses = week === null ? [] : getCoursesOfWeek(currentCourses, week);
+  const matched = sortSearchResults(filterCoursesByKeyword(weekCourses, searchKeyword));
+  const hasResult = matched.length > 0;
+
+  countEl.textContent = hasResult ? `本周匹配 ${matched.length} 门课` : '';
+  countEl.classList.toggle('is-hidden', !hasResult);
+
+  listEl.innerHTML = hasResult
+    ? renderCourseList(matched, currentSettings, now, { showWeekday: true })
+    : '';
+  listEl.classList.toggle('is-hidden', !hasResult);
+
+  noMatchEl.classList.toggle('is-hidden', hasResult);
+}
+
+/**
+ * 应用搜索：记下关键词 → 重画结果 → 让 applyDisplayState() 决定显示哪几块。
+ * 传空字符串 = 退出搜索，回到原来的视图。
+ */
+function applySearch(keyword) {
+  searchKeyword = keyword.trim();
+  if (searchKeyword !== '') renderSearchPanel();
+  applyDisplayState();
+}
+
+/**
+ * 退出搜索：清空输入框与搜索态。
+ * ⚠️ 清空按钮点完把焦点还给输入框，否则键盘用户想再搜一次得重新 Tab 找回来。
+ */
+function exitSearch() {
+  searchKeyword = '';
+  const input = document.getElementById('filter-input');
+  if (input) input.value = '';
+  applyDisplayState();
+}
+
+/** 接上筛选条的输入与「清空」 */
+function initCourseFilter() {
+  const input = document.getElementById('filter-input');
+  const clearBtn = document.getElementById('filter-clear');
+  if (!input || !clearBtn) return;
+
+  input.addEventListener('input', () => applySearch(input.value));
+
+  clearBtn.addEventListener('click', () => {
+    exitSearch();
+    input.focus();
   });
 }
 
@@ -336,8 +494,8 @@ function showPageState(stateId) {
     document.getElementById(id).classList.toggle('is-hidden', !isNormal);
   });
 
-  // 恢复正常时还要按「今日 / 周视图」当前的选择显示对应的那一个
-  if (isNormal) applyView();
+  // 恢复正常时再细分：按搜索态 / 视图态 / 本周有没有课，决定具体显示哪几块
+  if (isNormal) applyDisplayState();
 }
 
 /* 读取失败的原因文案（TECH_DESIGN 6.1 第 1 条：用户看中文说明，
@@ -390,9 +548,16 @@ function renderPage(courses, settings) {
   const now = new Date();
   const week = getWeekNumber(settings, now);
 
+  /* 留一份给搜索用：输入事件触发时拿不到这里的局部变量（Day 12） */
+  currentCourses = courses;
+  currentSettings = settings;
+
   renderWeekbar(week, now);
   renderTodayView(courses, settings, now);
   renderWeekGrid(courses, week, getWeekday(now));
+
+  /* 正在搜索时，新数据也要重新过一遍筛选（刷新后结果跟着更新，不留在旧结果上） */
+  if (searchKeyword !== '') renderSearchPanel();
 }
 
 /**
@@ -488,6 +653,7 @@ function initRefreshButton() {
 
 /* 页面加载时：先接好「不需要数据」的线，再走一次读取流程 */
 initViewSwitch();
+initCourseFilter();
 initRetryButton();
 initRefreshButton();
 bootstrap();

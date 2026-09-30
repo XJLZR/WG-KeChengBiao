@@ -53,6 +53,34 @@
     </div>
 
     <!-- ============================================================
+         本周课程搜索（Day 12）
+         它搜的是「本周」的课，不是只有今天 —— 所以放在视图切换器下方、
+         两个视图外面，今日视图与周视图都能用，不做进任何一个视图里。
+         出现条件：本周有课（今天没课也能搜本周）。显隐由 ui-home.js 统一控制。
+         ============================================================ -->
+    <section class="course-filter is-hidden" id="course-filter">
+      <label class="course-filter__label" for="filter-input">搜索本周</label>
+      <input class="course-filter__input" id="filter-input" type="text"
+             placeholder="课程名 / 地点 / 教师" autocomplete="off" spellcheck="false">
+      <button class="btn btn--ghost course-filter__clear" type="button" id="filter-clear">清空</button>
+    </section>
+
+    <!-- ============================================================
+         搜索结果区（Day 12）：有搜索词时显示，此时今日视图与周视图都藏起来
+         ⚠️ 「本周没有匹配的课程」与 V1.2「今天没有课」含义不同：
+            前者是「有课、被筛掉了」，后者是「今天确实没排课」——
+            文案不能混用，混了用户会以为课没了（与 V1.8 同一条原则）。
+         ============================================================ -->
+    <div class="search-panel is-hidden" id="search-panel">
+      <p class="search-panel__count is-hidden" id="search-count" aria-live="polite"></p>
+      <section class="course-list is-hidden" id="search-list"></section>
+      <section class="card empty-state is-hidden" id="state-no-match">
+        <p class="empty-state__title">本周没有匹配的课程</p>
+        <p class="empty-state__desc">换个关键词试试，或点「清空」看本周的全部课程</p>
+      </section>
+    </div>
+
+    <!-- ============================================================
          今日视图（PRD P1 的 V1.1–V1.5）
          五个视图同时只显示一个，由 js/ui-home.js 按数据判断后切换。
          默认让 V1.5（空课表）保持可见：万一是脚本没加载成功，也不至于白屏

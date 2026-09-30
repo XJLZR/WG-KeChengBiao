@@ -314,6 +314,87 @@
 }
 
 /* ============================================================
+   本周课程搜索（Day 12）
+   首页专用：筛选条 + 搜索结果区。取值全部来自 base.css 的变量，不新造颜色 ——
+   结果卡片复用同一套 .course-card 与 --course-* 配色，只多一行星期标签，
+   所以搜出来的课和今日列表里的课看起来是同一个东西。
+   ============================================================ */
+
+/* 筛选条：白底圆角容器，与 .view-switch / .app-nav 同一套外观 */
+.course-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  margin-bottom: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.course-filter__label {
+  flex: 0 0 auto;
+  padding-left: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--color-text-sub);
+}
+
+/* 输入框。
+   min-width: 0 是必须的：flex 子项默认 min-width: auto，
+   输入框这类可滚动元素的最小宽度按内容算，窄屏会把「清空」按钮挤出容器。 */
+.course-filter__input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;              /* 触摸目标 ≥40px */
+  padding: var(--space-2) var(--space-3);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+/* 占位提示也走「承载信息」那一档灰，不用最浅的装饰档 */
+.course-filter__input::placeholder {
+  color: var(--color-text-sub);
+}
+
+.course-filter__input:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+  border-color: var(--color-brand);
+}
+
+/* 清空按钮：复用 .btn--ghost 的四种状态，只把尺寸收小 */
+.course-filter__clear {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+}
+
+/* ---------- 搜索结果区 ---------- */
+
+/* 结果计数：「本周匹配 N 门课」，空搜索词时整行隐藏 */
+.search-panel__count {
+  margin-bottom: var(--space-3);
+  font-size: var(--font-sm);
+  color: var(--color-text-sub);
+}
+
+/* 结果卡片上的星期标签。
+   结果跨天，只说「第 3–4 节」不知道是星期几，所以每条都标出星期。
+   颜色跟着所在卡片的配色走（--course-text 由 .course-color-N 提供）。 */
+.course-card__weekday {
+  margin-bottom: 2px;
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--course-text, var(--color-brand));
+}
+
+/* ============================================================
    首页级过程状态（PRD V1.7 加载中 / V1.8 读取失败）
    这两个状态出现时，首页的其余部分（信息条、视图切换、今日与周视图）都不显示，
    由 js/ui-home.js 的 showPageState() 统一切换
