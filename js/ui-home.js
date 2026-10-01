@@ -112,21 +112,27 @@ function renderWeekbar(week, now) {
  * 都能直接用同一张卡片。
  *
  * options.showWeekday（Day 12，搜索结果专用）打开后：
- *   ① 卡片上方多一行星期标签 —— 结果跨天，只说「第 3–4 节」不知道是星期几；
+ *   ① 信息行末尾补上星期 —— 结果跨天，只说「第 3–4 节」不知道是星期几；
  *   ② 不显示「已结束 / 正在上课 / 未开始」—— 那套状态是拿「此刻」算的，
  *      套在别的星期的课上会答错（周四去搜周三的课，它必然显示「已结束」，
  *      这个结论对用户毫无意义）。
+ *
+ * ⚠️ Day 14 改动（用户测试反馈「搜索内容里的老师删掉，改成周几」）：
+ *   搜索结果里星期比教师有用，所以那一行改成「节次 · 地点 · 星期」，
+ *   且不再单独占一行标签（原来在卡片上方，占掉一行高度还没信息量）。
+ *   今日视图的卡片不受影响，教师照旧显示。
  */
 function renderCourseCard(course, settings, now, options) {
   const opts = options || {};
   const isSearchResult = Boolean(opts.showWeekday);
 
   const metaParts = [formatPeriods(course.periods), course.location || '—'];
-  if (course.teacher) metaParts.push(course.teacher);   // 教师为空时该位置留空，不放占位符（PRD 5.1）
-
-  const weekdayTag = isSearchResult
-    ? `<p class="course-card__weekday">${WEEKDAY_NAMES[course.weekday - 1]}</p>`
-    : '';
+  if (isSearchResult) {
+    /* 搜索结果：第三格放星期（不给教师留位置） */
+    metaParts.push(WEEKDAY_NAMES[course.weekday - 1]);
+  } else if (course.teacher) {
+    metaParts.push(course.teacher);   // 教师为空时该位置留空，不放占位符（PRD 5.1）
+  }
 
   let ongoingCls = '';
   let statusTag = '';
@@ -139,7 +145,6 @@ function renderCourseCard(course, settings, now, options) {
   return (
     `<article class="course-card ${getCourseColorClass(course.name)}${ongoingCls}">` +
     `<div class="course-card__main">` +
-    weekdayTag +
     `<p class="course-card__name">${escapeHtml(course.name)}</p>` +
     `<p class="course-card__meta">${escapeHtml(metaParts.join(' · '))}</p>` +
     `</div>` +
@@ -366,10 +371,18 @@ let activeView = 'today';
  * 为什么收在一个函数里：现在三个维度会互相牵扯，分开判断必然打架 ——
  *   ① 搜索态：有搜索词时只显示搜索结果区，今日视图与周视图都藏起来；
  *   ② 视图态：没在搜索时，按 activeView 显示今日或周视图；
- *   ③ 筛选条：本周有课才给（空课表 / 假期 / 本周无课时不显示，没什么可搜的）。
+ *   ③ 筛选条：本周有课、且当前在今日视图时才给。
  * 读取中与读取失败不在这里判断 —— showPageState() 会先把正常内容整体藏掉。
  *
  * Day 12 之前这个函数只管 ②，那时叫 applyView()。
+ *
+ * ⚠️ Day 14 改动（用户测试反馈「把周视图的搜索栏删掉」）：
+ *   条件 ③ 增加了 activeView === 'today'。原因：用户实测时在周视图里
+ *   看到搜索框，以为它能搜「周三下午有没有课」（搜时间），结果搜不到 ——
+ *   搜索框出现在周视图里给了它「按表格查」的错误暗示。
+ *   现在周视图不显示搜索框，搜索只在今日视图提供。
+ *   注意：搜索框隐藏不等于搜索功能被砍（F9 仍在），
+ *   它只是不再出现在周视图里 —— 切回今日视图仍然可用。
  */
 function applyDisplayState() {
   const isSearching = searchKeyword !== '';
@@ -378,13 +391,15 @@ function applyDisplayState() {
   document.getElementById('view-week').classList.toggle('is-hidden', isSearching || activeView !== 'week');
   document.getElementById('search-panel').classList.toggle('is-hidden', !isSearching);
 
-  /* 筛选条要等数据到手才算得出「本周有没有课」；还没读到数据就先藏起来 */
+  /* 筛选条要等数据到手才算得出「本周有没有课」；还没读到数据就先藏起来。
+     Day 14：再加一道「必须在今日视图」—— 周视图下不给搜索框。 */
   let hasWeekCourses = false;
   if (currentCourses && currentSettings) {
     const week = getWeekNumber(currentSettings, new Date());
     hasWeekCourses = week !== null && getCoursesOfWeek(currentCourses, week).length > 0;
   }
-  document.getElementById('course-filter').classList.toggle('is-hidden', !hasWeekCourses);
+  const showFilter = hasWeekCourses && activeView === 'today';
+  document.getElementById('course-filter').classList.toggle('is-hidden', !showFilter);
 }
 
 /**
