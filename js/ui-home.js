@@ -207,6 +207,56 @@ function renderTodayView(courses, settings, now) {
     renderNextCard(getNextCourse(todayCourses, settings, now), settings);
     document.getElementById('course-list').innerHTML = renderCourseList(todayCourses, settings, now);
   }
+
+  /* V1.2 的说明文字是算出来的：告诉用户「本周还有哪几天有课」，
+     比写死一句「今天没有排课」有用（Day 13） */
+  if (visibleId === 'state-no-today') {
+    document.getElementById('state-no-today-desc').textContent =
+      buildNoTodayDesc(courses, settings, week, todayWeekday);
+  }
+}
+
+/**
+ * V1.2「今天没有课」的说明文字（Day 13）。
+ *
+ * 为什么要算：原来写死一句「今天没有排课」，跟标题「今天没有课」是同一个意思，
+ *   等于没说。用户真正想知道的是「那我哪天有课」。
+ *
+ * 规则：
+ *   ① 先看本周还没过的日子（todayWeekday 之后）里有没有课 → 「本周周三、周四还有课」
+ *   ② 后面没有了，再看本周已经过去的（todayWeekday 之前）→ 「本周的课都上完了」
+ *   ③ 整周确无安排 → 让用户去看周视图自己确认
+ *
+ * @param {Array} courses 全部课程
+ * @param {Object} settings 设置（要有 periodTimes / semesterStart）
+ * @param {number} week 本周周次
+ * @param {number} todayWeekday 今天星期几（1=周一 … 7=周日）
+ * @returns {string} 一句中文说明
+ */
+function buildNoTodayDesc(courses, settings, week, todayWeekday) {
+  const weekCourses = getCoursesOfWeek(courses, week);
+
+  /* 本周「星期几」这一列有课：把 weekday 收成一个集合，方便判断前后 */
+  const daysWithCourse = new Set(weekCourses.map((c) => c.weekday));
+
+  const laterDays = [];
+  const earlierDays = [];
+  daysWithCourse.forEach((wd) => {
+    if (wd > todayWeekday) laterDays.push(wd);
+    else if (wd < todayWeekday) earlierDays.push(wd);
+  });
+  laterDays.sort((a, b) => a - b);
+  earlierDays.sort((a, b) => a - b);
+
+  const nameOf = (wd) => WEEKDAY_NAMES[wd - 1];
+
+  if (laterDays.length > 0) {
+    return `今天没有排课，本周${laterDays.map(nameOf).join('、')}还有课`;
+  }
+  if (earlierDays.length > 0) {
+    return `今天没有排课，本周的课都上完了`;
+  }
+  return '今天没有排课，可以看看周视图了解本周安排';
 }
 
 /**

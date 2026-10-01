@@ -107,9 +107,11 @@
       </section>
 
       <!-- ---------- V1.2 今日没课 ---------- -->
+      <!-- ⚠️ 说明文字由 js/ui-home.js 的 renderNoTodayDesc() 填：
+           会算出「本周还剩哪几天有课」，比写死一句更有用（Day 13） -->
       <section class="card empty-state is-hidden" id="state-no-today">
         <p class="empty-state__title">今天没有课</p>
-        <p class="empty-state__desc">今天没有排课</p>
+        <p class="empty-state__desc" id="state-no-today-desc"></p>
       </section>
 
       <!-- ---------- V1.3 非教学周 ---------- -->
@@ -119,9 +121,11 @@
       </section>
 
       <!-- ---------- V1.4 本周没课 ---------- -->
+      <!-- ⚠️ 与 V1.2 的区别：这里是「整周都没排课」，不是「今天恰好没课」。
+           说明里要点出可能原因，否则用户会以为课表丢了（Day 13） -->
       <section class="card empty-state is-hidden" id="state-no-week">
         <p class="empty-state__title">本周没有课</p>
-        <p class="empty-state__desc">课表里这一周没有安排课程</p>
+        <p class="empty-state__desc">这一周课表里没有安排课程，可能是假期或临时调课</p>
       </section>
     </div>
 
