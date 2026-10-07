@@ -32,10 +32,12 @@ const LIMIT_MAX = 500;
 function send(res, status, body) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    // 前端部署在 tcloudbaseapp.com，与函数域名不同源，为 Day 18 前端接线预留 CORS
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    // CORS 交给网关侧「跨域设置」统一回显（Day 20 拍板方案 A）。
+    // 此前函数自带的 ACAO:* 会与网关回显叠加成 "<Origin>,*"——
+    // 该值不符合 CORS 规范（这个头不允许逗号列表），浏览器直接拒收，
+    // courses/import 两条路由因此全被拦（health 函数没写过 CORS 头，一直正常）。
+    // 网关侧实测（Day 20）：白名单来源回显精确单值、陌生来源不给 ACAO 头、
+    // OPTIONS 预检由网关应答（204 + allow-methods/headers 按请求回显）。
   });
   res.end(JSON.stringify(body));
 }

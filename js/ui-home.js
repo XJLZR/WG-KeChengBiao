@@ -28,8 +28,9 @@ const PAGE_STATE_IDS = ['state-loading', 'state-error'];
 /* 读取成功时才显示的正常内容 —— 过程状态出现时，这些全部藏起来。
    Day 12 把筛选条与搜索结果区也归进「正常内容」：读取中 / 读取失败时
    必须一起藏掉，否则它们会残留在错误页上方。
+   Day 20 加入「数据更新时间」行：同属正常内容。
    至于正常态里具体显示哪几块，交由 applyDisplayState() 细分。 */
-const NORMAL_IDS = ['weekbar', 'view-switch', 'course-filter', 'search-panel', 'view-today', 'view-week'];
+const NORMAL_IDS = ['weekbar', 'view-switch', 'course-filter', 'search-panel', 'view-today', 'view-week', 'data-updated'];
 
 /* 状态标签的中文。内部用英文代号，显示时才翻译（TECH_DESIGN 6.1：
    「用户看懂的，和开发看懂的，分开」） */
@@ -90,6 +91,46 @@ function formatTimeLabel(date) {
   const mm = String(date.getMinutes()).padStart(2, '0');
   return `${hh}:${mm}`;
 }
+
+/** Date → "M月D日 HH:MM:SS"（数据更新时间用，精确到秒方便确认刷新过） */
+function formatFetchTime(date) {
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  const ss = String(date.getSeconds()).padStart(2, '0');
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${hh}:${mm}:${ss}`;
+}
+
+/* ---------- 数据源（Day 20） ---------- */
+
+/* 云函数公网地址（api-contract.md 第 1 节 Base URL）。
+   跨域由网关侧 CORS 白名单放行：本页部署域名 + 本地调试 http://127.0.0.1:8012，
+   禁止 * 通配符（Day 20 清单要求）。 */
+const API_BASE_URL =
+  'https://wg-kechengbiao-d9gi92b9ma9e7f71c-1501303146.ap-shanghai.app.tcloudbase.com';
+
+/* 设置数据（TECH_DESIGN 3.2）。
+   数据库只存课程（Day 16 两表），「学期起点 + 作息时间表」暂无接口，
+   先以默认常量形式放在前端——数值与原 mock 版一致（一版通用作息，
+   真实作息待确认，见 TECH_DESIGN 第 10 节待确认项 1）。
+   它只影响「第 N 周」「状态标签」「下一节课」算得准不准，不影响课表数据本身。 */
+const DEFAULT_SETTINGS = {
+  semesterStart: '2026-08-31',   // 学期第一周周一
+  periodTimes: [
+    { start: '08:00', end: '08:45' },  // 第 1 节
+    { start: '08:50', end: '09:35' },  // 第 2 节
+    { start: '09:50', end: '10:35' },  // 第 3 节
+    { start: '10:40', end: '11:25' },  // 第 4 节
+    { start: '14:00', end: '14:45' },  // 第 5 节
+    { start: '14:50', end: '15:35' },  // 第 6 节
+    { start: '15:50', end: '16:35' },  // 第 7 节
+    { start: '16:40', end: '17:25' },  // 第 8 节
+    { start: '19:00', end: '19:45' },  // 第 9 节
+    { start: '19:50', end: '20:35' },  // 第 10 节
+    { start: '20:40', end: '21:25' },  // 第 11 节
+    { start: '21:30', end: '22:15' },  // 第 12 节
+  ],
+  schemaVersion: 1,
+};
 
 /* ---------- 顶部信息条 ---------- */
 
@@ -565,10 +606,13 @@ function showPageState(stateId) {
 
 /* 读取失败的原因文案（TECH_DESIGN 6.1 第 1 条：用户看中文说明，
    技术细节只进 console.error）。code 由数据层抛出，「重试」也修不好的情况
-   才这样写；其余情况落到兜底文案。 */
+   才这样写；其余情况落到兜底文案。
+   Day 20：数据源从本机换成公网接口，文案里的「本机」口径同步改掉。 */
 const READ_ERROR_TEXT = {
-  DATA_CORRUPT: '本机保存的数据结构不完整，可能被改动过',
-  DATA_VERSION_UNSUPPORTED: '本机数据的版本比当前页面新，请刷新页面或更新程序',
+  NETWORK_ERROR: '连不上课程服务器，请检查网络后重试',
+  SERVER_ERROR: '课程服务器出了问题，请稍后重试',
+  DATA_CORRUPT: '服务器返回的数据结构不完整，可能被改动过',
+  DATA_VERSION_UNSUPPORTED: '服务器数据的版本比当前页面新，请刷新页面后重试',
 };
 
 /**
@@ -577,10 +621,10 @@ const READ_ERROR_TEXT = {
  *    读取失败说成「没有数据」，用户会以为自己的课表丢了（PRD V1.8 明文要求）。
  */
 function showReadError(error) {
-  console.error('[首页] 读取本机数据失败：', error);
+  console.error('[首页] 读取课表数据失败：', error);
 
   document.getElementById('state-error-reason').textContent =
-    (error && READ_ERROR_TEXT[error.code]) || '读取本机数据时出错，请稍后重试';
+    (error && READ_ERROR_TEXT[error.code]) || '读取课表数据时出错，请稍后重试';
 
   showPageState('state-error');
 }
@@ -590,22 +634,59 @@ function showReadError(error) {
 /** 「加载中」用的定时器；数据读回来后要清掉，否则它会把已经显示出的内容盖住 */
 let loadingTimer = null;
 
+/* 最近一次成功抓取数据的时间（Day 20，渲染到 #data-updated） */
+let lastFetchTime = null;
+
 /**
- * 读取本机数据，返回 { courses, settings }。
+ * 读取课表数据，返回 { courses, settings }。
  *
- * ⚠️ 现在返回的是 mock 假数据（同步）。T4 接上本机存储后，把函数体换成
- *      const courses = await storage.getCourses();
- *      return { courses, settings: storage.getSettings() };
- *    即可——数据层返回 Promise 也照样能用，其余代码一行不用动，
- *    同时删掉 index.html 里 mock-data.js 那行 <script>。
- *    （两个函数的签名见 TECH_DESIGN.md 4.2「模块间接口」）
+ * Day 20 起：数据不再来自本机 mock 文件，而是调云函数公网接口
+ * （api-contract.md 3.2：GET {API_BASE_URL}/api/courses）。
+ * 响应包络 { ok, data: { courses, count } }，courses 每条含契约 2.3 全部字段。
+ * settings 数据库暂无对应接口，用前端默认常量 DEFAULT_SETTINGS 补齐。
  *
  * ⚠️ 读取失败时**必须抛出错误**，不要吞掉后返回空数组：
  *    空数组会被当成「从未导入过」，首页就落到 V1.5 空课表，
  *    用户会以为课表丢了（PRD 第 7 节 T4 已写明这条约束）。
+ *
+ * 错误码口径（给 showReadError 显示用）：
+ *   NETWORK_ERROR —— fetch 本身失败（断网 / DNS / 被 CORS 拦）
+ *   SERVER_ERROR  —— HTTP 4xx/5xx（能读到包络就透传服务端 error.code）
+ *   DATA_CORRUPT  —— 响应体不是合法 JSON，或包络 / courses 结构不对
  */
 async function readLocalData() {
-  return { courses: MOCK_COURSES, settings: MOCK_SETTINGS };
+  let resp;
+  try {
+    resp = await fetch(`${API_BASE_URL}/api/courses`);
+  } catch (err) {
+    console.error('[首页] 接口请求失败：', err);
+    throw { code: 'NETWORK_ERROR', cause: err };
+  }
+
+  if (!resp.ok) {
+    // 4xx/5xx：能读到包络就透传服务端错误码，读不到（如平台层 450 空响应体）按服务器错误处理
+    let code = 'SERVER_ERROR';
+    try {
+      const errBody = await resp.json();
+      if (errBody && errBody.error && errBody.error.code) code = errBody.error.code;
+    } catch (err) { /* 空响应体，保持 SERVER_ERROR */ }
+    throw { code, status: resp.status };
+  }
+
+  let body;
+  try {
+    body = await resp.json();
+  } catch (err) {
+    console.error('[首页] 响应不是合法 JSON：', err);
+    throw { code: 'DATA_CORRUPT', cause: err };
+  }
+
+  if (!body || body.ok !== true || !body.data || !Array.isArray(body.data.courses)) {
+    throw { code: 'DATA_CORRUPT' };
+  }
+
+  lastFetchTime = new Date();   // 抓取完成时刻，renderPage() 里显示
+  return { courses: body.data.courses, settings: DEFAULT_SETTINGS };
 }
 
 /** 读取成功后，把首页三块内容都画出来 */
@@ -620,6 +701,13 @@ function renderPage(courses, settings) {
   renderWeekbar(week, now);
   renderTodayView(courses, settings, now);
   renderWeekGrid(courses, week, getWeekday(now));
+
+  /* Day 20：显示本次数据的抓取时间（接口成功返回的时刻）。
+     放在 renderPage 里而非 readLocalData 里，刷新流程也能自动更新它。 */
+  const updatedEl = document.getElementById('data-updated');
+  if (updatedEl && lastFetchTime) {
+    updatedEl.textContent = `数据更新于 ${formatFetchTime(lastFetchTime)}`;
+  }
 
   /* 正在搜索时，新数据也要重新过一遍筛选（刷新后结果跟着更新，不留在旧结果上） */
   if (searchKeyword !== '') renderSearchPanel();
@@ -676,9 +764,8 @@ let isRefreshing = false;
  *    V1.8 错误页，调用方拿不到「成功还是失败」——用它的话，读取失败也会弹
  *    「刷新成功」，弹窗就说了谎。这里自己 try/catch，成败才能分流到两个弹窗。
  *
- * ⚠️ 演示版（Day 11 拍板的 B 方案）：mock 数据是同步返回、必成功，
- *    catch 分支今天到不了（失败弹窗代码已写好、不触发）；
- *    T4 接上真实存储后，readLocalData 失败会真的抛错，这个分支自然生效。
+ * Day 20 起数据来自公网接口，readLocalData 失败会真的抛错，
+ * catch 分支自然生效（不再有「mock 必成功到不了 catch」的演示期限制）。
  */
 function initRefreshButton() {
   const btn = document.getElementById('refresh-btn');

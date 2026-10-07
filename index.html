@@ -44,6 +44,10 @@
       </div>
     </section>
 
+    <!-- Day 20：数据更新时间 = 本次成功抓取接口的时刻（由 ui-home.js 填入，
+         读取中 / 读取失败时随正常内容一起隐藏，见 NORMAL_IDS） -->
+    <p class="section-title is-hidden" id="data-updated" aria-live="polite"></p>
+
     <!-- ============================================================
          视图切换（PRD V1.1 今日视图 ↔ V1.6 周视图）
          ============================================================ -->
@@ -158,18 +162,18 @@
     <!-- ⚠️ 这里绝不能写成 V1.5 的「还没有课表数据」：两者的含义完全不同，
          读取失败说成「没有数据」，用户会以为自己的课表丢了（PRD V1.8 明文要求） -->
     <section class="card empty-state state-error is-hidden" id="state-error">
-      <p class="state-error__title">没能读到本机保存的课表</p>
+      <p class="state-error__title">没能读到课表数据</p>
       <p class="empty-state__desc" id="state-error-reason"></p>
       <button class="btn btn--primary" type="button" id="state-error-retry">重试</button>
     </section>
   </main>
 
-  <!-- 脚本加载顺序不能反：假数据 → 计算 → 界面 -->
+  <!-- 脚本加载顺序不能反：弹窗 → 计算 → 界面 -->
   <!-- Day 11：ui-modal.js 是状态弹窗组件，ui-home.js 的刷新流程要用它，
        必须排在 ui-home.js 之前 -->
+  <!-- Day 20：mock-data.js 已整份删除，首页数据改为运行时调用云函数公网接口
+       （GET {API_BASE_URL}/api/courses，见 ui-home.js 的 readLocalData） -->
   <script src="./js/ui-modal.js"></script>
-  <!-- mock-data.js 是临时文件，将来接真实数据（T2/T4）时整份删掉 -->
-  <script src="./js/mock-data.js"></script>
   <script src="./js/schedule.js"></script>
   <script src="./js/ui-home.js"></script>
 </body>

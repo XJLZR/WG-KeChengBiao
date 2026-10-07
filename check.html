@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>WG课程表 · 检查台</title>
+
+  <!-- 样式复用主站（./ 相对路径，部署在子路径下） -->
+  <link rel="stylesheet" href="./css/base.css">
+</head>
+
+<body>
+  <header class="app-header">
+    <h1 class="app-header__title">WG课程表 · 检查台</h1>
+  </header>
+
+  <!-- 检查台是调试页，不进主导航；顶部导航条保持三页互通，方便跳回去 -->
+  <nav class="app-nav">
+    <a class="app-nav__item" href="./index.html">今日</a>
+    <a class="app-nav__item" href="./import.html">导入</a>
+    <a class="app-nav__item" href="./settings.html">设置</a>
+  </nav>
+
+  <main class="app-main">
+    <!-- 最后更新时间（Day 20 余力加练）：每次成功刷新数据后更新 -->
+    <div class="card">
+      <p class="section-title" id="last-updated">尚未刷新</p>
+      <button class="btn btn--ghost" type="button" id="refresh-btn">刷新检查</button>
+    </div>
+
+    <!-- ① 服务健康：GET /api/health -->
+    <section class="card">
+      <p class="section-title">① 服务健康（GET /api/health）</p>
+      <p id="health-status">检查中…</p>
+      <p class="section-title" id="health-time"></p>
+    </section>
+
+    <!-- ② 核心表真实数据：GET /api/courses -->
+    <section class="card">
+      <p class="section-title">② 核心表真实数据（GET /api/courses）</p>
+      <p id="courses-status">读取中…</p>
+      <ul id="courses-list" style="margin-top:8px;padding-left:20px"></ul>
+    </section>
+
+    <!-- ③ 写入测试：POST /api/courses/import
+         做法是「读出当前全部课程 → 原样回传」：接口语义是整体替换，
+         回传相同数据 = 库内容不变，但走了一遍真实写入链路（Day 19 回归同款方法） -->
+    <section class="card">
+      <p class="section-title">③ 写入测试（POST /api/courses/import）</p>
+      <p>先读出当前全部课程，再原样回传——接口是「导入即替换」，回传相同数据等于库不变，但能验证真实写入链路。</p>
+      <p><button class="btn btn--primary" type="button" id="write-test-btn">执行写入测试</button></p>
+      <p id="write-result"></p>
+    </section>
+  </main>
+
+  <!-- 检查台脚本内联在本页：它是一次性调试页，不进 js/ 五文件主流程体系 -->
+  <script>
+    /* 云函数公网地址（与 js/ui-home.js 的 API_BASE_URL 保持一致） */
+    const API_BASE_URL =
+      'https://wg-kechengbiao-d9gi92b9ma9e7f71c-1501303146.ap-shanghai.app.tcloudbase.com';
+
+    const WEEKDAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+    /** 课程名里的特殊字符转义（与 ui-home.js 同一套） */
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    /** Date → "M月D日 HH:MM:SS" */
+    function formatTime(date) {
+      const hh = String(date.getHours()).padStart(2, '0');
+      const mm = String(date.getMinutes()).padStart(2, '0');
+      const ss = String(date.getSeconds()).padStart(2, '0');
+      return `${date.getMonth() + 1}月${date.getDate()}日 ${hh}:${mm}:${ss}`;
+    }
+
+    /** 节次数组 → 中文：[1,2] → 第1-2节 */
+    function formatPeriods(periods) {
+      const min = Math.min(...periods);
+      const max = Math.max(...periods);
+      return min === max ? `第${min}节` : `第${min}-${max}节`;
+    }
+
+    /* 最近一次读到的课程（写入测试要用：读出 → 原样回传） */
+    let currentCourses = null;
+
+    /**
+     * 刷新检查：health + courses 一起查。
+     * 两项各自独立报告成败——health 挂了不代表 courses 那栏不能说明原因。
+     */
+    async function refreshAll() {
+      const healthEl = document.getElementById('health-status');
+      const healthTimeEl = document.getElementById('health-time');
+      const coursesEl = document.getElementById('courses-status');
+      const listEl = document.getElementById('courses-list');
+      const lastEl = document.getElementById('last-updated');
+
+      /* ---------- ① health ---------- */
+      healthEl.textContent = '检查中…';
+      healthTimeEl.textContent = '';
+      try {
+        const resp = await fetch(`${API_BASE_URL}/api/health`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const body = await resp.json();
+        if (!body || body.ok !== true) throw new Error('响应包络不对');
+        healthEl.textContent = '✅ 正常（HTTP 200）';
+        healthTimeEl.textContent = `服务器时间：${body.time}`;
+      } catch (err) {
+        healthEl.textContent = `❌ 异常：${err.message}`;
+      }
+
+      /* ---------- ② courses ---------- */
+      coursesEl.textContent = '读取中…';
+      listEl.innerHTML = '';
+      try {
+        const resp = await fetch(`${API_BASE_URL}/api/courses`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const body = await resp.json();
+        if (!body || body.ok !== true || !body.data || !Array.isArray(body.data.courses)) {
+          throw new Error('响应包络或 courses 结构不对');
+        }
+        currentCourses = body.data.courses;
+
+        coursesEl.textContent = `✅ 读取成功：共 ${body.data.count} 门课`;
+        listEl.innerHTML = currentCourses.map((course) =>
+          `<li>${escapeHtml(course.name)} · ${WEEKDAY_NAMES[course.weekday - 1]} ` +
+          `${formatPeriods(course.periods)} · ${escapeHtml(course.location || '—')} · ` +
+          `${escapeHtml(course.teacher || '—')} · ${course.weeks.length} 个周次</li>`
+        ).join('');
+      } catch (err) {
+        currentCourses = null;
+        coursesEl.textContent = `❌ 读取失败：${err.message}`;
+      }
+
+      /* ---------- 最后更新时间（余力加练） ---------- */
+      lastEl.textContent = `最后更新：${formatTime(new Date())}`;
+    }
+
+    /**
+     * 写入测试：读出 → 原样回传。
+     * 判定标准：imported 数量与读出数量一致（相同数据整批替换成功）。
+     * 三道保险：库为空不执行（契约本来就拒空数组）、测试期间禁用按钮、
+     * 失败时把服务端中文错误信息原样展示。
+     */
+    async function runWriteTest() {
+      const btn = document.getElementById('write-test-btn');
+      const resultEl = document.getElementById('write-result');
+
+      if (!currentCourses) {
+        resultEl.textContent = '❌ 没有可用数据（先让第 ② 项读取成功）';
+        return;
+      }
+
+      btn.disabled = true;
+      resultEl.textContent = '正在写入…';
+
+      try {
+        const resp = await fetch(`${API_BASE_URL}/api/courses/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ courses: currentCourses }),
+        });
+        const body = await resp.json();
+        if (!resp.ok || !body || body.ok !== true) {
+          const msg = (body && body.error && body.error.message) || `HTTP ${resp.status}`;
+          throw new Error(msg);
+        }
+
+        const imported = body.data && body.data.imported;
+        const expected = currentCourses.length;
+        resultEl.textContent = imported === expected
+          ? `✅ 写入成功：imported ${imported}，与读出条数 ${expected} 一致，库内容未变`
+          : `⚠️ 写入返回 imported ${imported}，但读出条数是 ${expected}，请核对`;
+      } catch (err) {
+        resultEl.textContent = `❌ 写入失败：${err.message}`;
+      }
+
+      btn.disabled = false;
+    }
+
+    /* 页面加载即查一遍；按钮手动重查 / 重测 */
+    document.getElementById('refresh-btn').addEventListener('click', refreshAll);
+    document.getElementById('write-test-btn').addEventListener('click', runWriteTest);
+    refreshAll();
+  </script>
+</body>
+
+</html>
