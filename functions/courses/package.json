@@ -2,7 +2,7 @@
   "name": "wg-courses-api",
   "version": "1.0.0",
   "private": true,
-  "description": "WG课程表 GET /api/courses 读接口（Day 17）",
+  "description": "WG课程表 课程接口：GET 读 + POST /api/courses/import 导入写（Day 17-18）",
   "main": "index.js",
   "engines": {
     "node": ">=20"
