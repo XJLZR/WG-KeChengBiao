@@ -1,26 +1,28 @@
 // ============================================================
 // 课程接口（Day 17 GET 读 + Day 18 POST 导入写，契约 api-contract.md 3.2 / 3.3）
-// 数据来源：CloudBase PostgreSQL courses + course_weeks 两表（Day 16 建）
-// 访问方式：PG HTTP 网关（PostgREST 语法），走平台内部链路
-//   —— 免费体验版共享集群无内网/外网直连地址（Day 17 实测：配置页内网地址为"-"、
-//      外网 IPv4 关闭），pg 协议直连不可行，故改走 HTTP 网关（官方兜底路径）
-// 响应统一 { ok, data, error } 包络（契约 2.1）
+// Day 19 分层重构：本文件只保留「接口层」职责——接请求（读参数/请求体、校验）、
+// 调数据访问层函数、返响应（统一 { ok, data, error } 包络，契约 2.1）。
+// 所有数据库操作已迁至 repositories/（本文件不再出现网关 URL 和 fetch）：
+//   rdbClient.js              网关低层：URL/鉴权头/超时/错误包装
+//   coursesRepository.js      courses 主表查/删/写 + 数据库行↔契约对象映射
+//   courseWeeksRepository.js  course_weeks 子表批量写
+// 数据来源：CloudBase PostgreSQL courses + course_weeks 两表（Day 16 建），
+// 经 PG HTTP 网关（PostgREST 语法）访问——免费版无直连地址，详见 rdbClient.js 注释
 // Day 18 导入：整体替换 + 整批校验，替换分三步（删旧→插主表→插子表），
 //   中途失败会记日志并如实返回，见 handleImport 内注释
 // ============================================================
 const http = require('http');
+const { hasApiKey } = require('./repositories/rdbClient');
+const {
+  fetchCourses,
+  toCourse,
+  toDbRow,
+  deleteAllCourses,
+  insertCourses,
+} = require('./repositories/coursesRepository');
 
 // 监听端口必须与控制台「函数配置 → 监听端口」一致（Day 15 实测：不一致网关 65 秒超时返回 450）
 const PORT = 9000;
-
-// 环境 ID 不是秘密（公网 URL 里可见），可直接写；API Key 是服务端密钥，必须走环境变量
-const ENV_ID = 'wg-kechengbiao-d9gi92b9ma9e7f71c';
-const RDB_BASE = process.env.RDB_BASE_URL || `https://${ENV_ID}.api.tcloudbasegateway.com`;
-const API_KEY = process.env.RDB_API_KEY;
-
-if (!API_KEY) {
-  console.error('[courses] 缺少环境变量 RDB_API_KEY，所有请求将返回 SERVER_ERROR');
-}
 
 // limit 查询参数上限（余力加练，契约 3.2）
 const LIMIT_MAX = 500;
@@ -46,54 +48,9 @@ function fail(res, status, code, message) {
   send(res, status, { ok: false, error: { code, message } });
 }
 
-// ---------- 数据层：PG HTTP 网关查询 ----------
-
-// PostgREST 语法：
-//   select=*,course_weeks(week)        —— 按外键 course_weeks.course_id → courses.id 嵌套带出周次
-//   order=weekday.asc,periods.asc,...  —— 与原 SQL 的 ORDER BY 一致
-//   limit=N                            —— 参数化分页（URL 参数，无字符串拼接进查询体）
-async function fetchCourses(limit) {
-  const params = new URLSearchParams();
-  params.set('select', '*,course_weeks(week)');
-  params.set('order', 'weekday.asc,periods.asc,name.asc');
-  if (limit) params.set('limit', String(limit));
-
-  const url = `${RDB_BASE}/v1/rdb/rest/courses?${params.toString()}`;
-  const resp = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      Accept: 'application/json',
-    },
-    signal: AbortSignal.timeout(8000),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`RDB 网关 ${resp.status}: ${text.slice(0, 200)}`);
-  }
-  return resp.json();
-}
-
-// 网关行 → 契约 2.3 课程对象：snake_case 列名映射回 camelCase（契约 2.4 要点 2），
-// 嵌套的 course_weeks 数组拍平成 weeks
-function toCourse(row) {
-  const weeks = (row.course_weeks || []).map((w) => w.week).sort((a, b) => a - b);
-  return {
-    id: row.id,
-    name: row.name,
-    weekday: row.weekday,
-    periods: row.periods,
-    location: row.location,
-    teacher: row.teacher,
-    className: row.class_name,
-    scheduleDate: row.schedule_date,
-    courseOrder: row.course_order,
-    type: row.type,
-    weeks,
-  };
-}
-
 // ---------- 业务逻辑 ----------
+// （原「数据层：PG HTTP 网关查询」一段——fetchCourses/toCourse——已迁至
+//   repositories/coursesRepository.js，Day 19）
 
 // 解析 limit 查询参数（Day 17 余力加练，契约 3.2）
 // 合法：正整数 1–LIMIT_MAX；不传 = 返回全部；非法返回 null 由调用方按 BAD_REQUEST 拒绝
@@ -112,7 +69,7 @@ async function handleCourses(res, searchParams) {
     fail(res, 400, 'BAD_REQUEST', `limit 必须是 1-${LIMIT_MAX} 的整数`);
     return;
   }
-  if (!API_KEY) {
+  if (!hasApiKey()) {
     fail(res, 500, 'SERVER_ERROR', '服务端未配置数据库凭据（RDB_API_KEY）');
     return;
   }
@@ -247,73 +204,7 @@ function validateImportBody(courses) {
   return null;
 }
 
-// ---------- 写入：PG HTTP 网关（PostgREST 语法） ----------
-
-// 删除全部旧课程。外键 course_weeks.course_id ON DELETE CASCADE（Day 16 建表），
-// 删 courses 一张表即级联清空 course_weeks。
-// 加恒真过滤 id=not.is.null：显式表明意图，也防网关/PostgREST 拒绝无过滤的全表 DELETE
-async function deleteAllCourses() {
-  const url = `${RDB_BASE}/v1/rdb/rest/courses?id=not.is.null`;
-  const resp = await fetch(url, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${API_KEY}` },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`删除旧数据失败 RDB 网关 ${resp.status}: ${text.slice(0, 200)}`);
-  }
-}
-
-// 契约对象 → 数据库行（snake_case，契约 2.4 要点 2 的反向映射）。
-// course_weeks 以嵌套数组随行携带，由 insertCourses 拆出后单独批量插入
-// （嵌套插入实测不被网关支持，Day 18 PGRST204）
-function toDbRow(course) {
-  return {
-    id: course.id,
-    name: course.name,
-    weekday: course.weekday,
-    periods: course.periods,
-    location: course.location ?? '',
-    teacher: course.teacher ?? '',
-    class_name: course.className ?? '',
-    schedule_date: course.scheduleDate ?? '',
-    course_order: course.courseOrder ?? '',
-    type: course.type ?? '',
-    course_weeks: course.weeks.map((week) => ({ week })),
-  };
-}
-
-async function insertCourses(dbRows) {
-  // 分两步插入（Day 18 实测：嵌套插入不被网关支持，PGRST204 把嵌套键当列名找）。
-  // 先父表后子表，满足外键约束；weekRows 一次批量 POST 全部周次行
-  const courseRows = dbRows.map(({ course_weeks, ...row }) => row);
-  await postRows('courses', courseRows);
-  const weekRows = dbRows.flatMap((row) =>
-    row.course_weeks.map((w) => ({ course_id: row.id, week: w.week }))
-  );
-  if (weekRows.length > 0) {
-    await postRows('course_weeks', weekRows);
-  }
-}
-
-async function postRows(table, rows) {
-  const url = `${RDB_BASE}/v1/rdb/rest/${table}`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    },
-    body: JSON.stringify(rows),
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`写入 ${table} 失败 RDB 网关 ${resp.status}: ${text.slice(0, 200)}`);
-  }
-}
+// ---------- 写入：数据库操作已迁至 repositories/coursesRepository.js（Day 19） ----------
 
 // ---------- 导入处理主流程 ----------
 
@@ -343,7 +234,7 @@ async function handleImport(req, res) {
   }
   console.log(`[import] 收到导入请求: ${courses.length} 条，校验通过`);
 
-  if (!API_KEY) {
+  if (!hasApiKey()) {
     fail(res, 500, 'SERVER_ERROR', '服务端未配置数据库凭据（RDB_API_KEY）');
     return;
   }
