@@ -2,7 +2,7 @@
 
 > **状态**：Day 15 初稿（v1.0）。本文件是前端与云函数之间的接口约定：前端按它发请求，后端按它返回。后续每加一个接口、改一个字段，都必须先改这份文件再写代码。
 >
-> **当前进度**：仅 `/api/health` 已实现（Day 15），其余为占位登记，实现时间见各条。**Day 16：数据模型落地（2.4 节），数据库两表已建并灌入种子数据。**
+> **当前进度**：`/api/health`（Day 15）、`GET /api/courses`（Day 17）已实现，其余为占位登记，实现时间见各条。**Day 16：数据模型落地（2.4 节），数据库两表已建并灌入种子数据。Day 17：GET 读接口上线，从两表读真实数据并完成公网验证。**
 
 ## 1. 基础信息
 
@@ -106,16 +106,19 @@
 - **错误响应**：本接口没有业务错误。平台故障时可能返回 450（函数未就绪，见 2.2）或连接超时，此时响应体可能为空。前端约定：只要拿不到 HTTP 200 + 合法 JSON，即判定「后端不可用」。
 - **实现载体**：CloudBase Web 函数 `health`（Node.js 20，监听 9000 端口），经 HTTP 网关路由 `/api/health` 映射。
 
-### 3.2 GET /api/courses —— 课程列表（Day 17 实现）
+### 3.2 GET /api/courses —— 课程列表 ✅ 已实现（Day 17）
 
-- **请求参数**：无（本期只有单用户数据，无需筛选参数）
+- **请求参数**（query string，均可选）：
+  - `limit`：返回条数上限，正整数 1–500；不传 = 返回全部（Day 17 余力加练）。非整数或越界按 `BAD_REQUEST`（400）拒绝
 - **成功响应**（HTTP 200）：
 
 ```json
 { "ok": true, "data": { "courses": [ { "id": "…", "name": "…", "weekday": 3, "periods": [6,7], "location": "…", "teacher": "…", "weeks": [1,5] } ], "count": 42 } }
 ```
 
-- **错误**：见 2.2 错误码表。
+- **字段说明**：`courses` 按星期、节次、课名升序排列；每条含 2.3 的全部契约字段（含 `className`/`scheduleDate`/`courseOrder`/`type` 解析保留字段）；`count` = 本次返回的课程条数
+- **错误**：`BAD_REQUEST`（limit 非法）、`METHOD_NOT_ALLOWED`（非 GET）、`NOT_FOUND`（路径不匹配）、`SERVER_ERROR`（网关/数据库读取失败），见 2.2 错误码表
+- **实现载体**：CloudBase Web 函数 `courses`（Node.js 20，监听 9000 端口），经 HTTP 网关路由 `/api/courses`（已开路径透传、免鉴权）。数据访问走 **PG HTTP 网关**（PostgREST 语法）读 `courses` + `course_weeks` 两表并组装 `weeks` 数组——免费体验版共享集群无内网/外网直连地址（Day 17 实测配置页内网地址为空），pg 协议直连不可行，采用官方 HTTP API 兜底路径；鉴权用环境变量 `RDB_API_KEY`（API Key，service_role），不进代码仓库
 
 ### 3.3 POST /api/courses/import —— 导入课表（Day 18 实现）
 
@@ -166,3 +169,4 @@
 | 2026-10-07 | v1.0 | Day 15 初稿：登记 5 条接口，实现 `/api/health`，其余占位 |
 | 2026-10-07 | v1.1 | Day 15 自查补漏：health 补错误形状、错误码表补 450、import 补空数组与规模上限、PATCH 补字段白名单与 id 不重算 |
 | 2026-10-07 | v1.2 | Day 16：新增 2.4 数据库表结构（`courses` + `course_weeks`，方案 A），建表与种子脚本入库，接口字段与数据库落位对齐 |
+| 2026-10-07 | v1.3 | Day 17：3.2 标记已实现；补 `limit` 查询参数定义（余力加练）；登记实现载体（Web 函数 `courses` + PG HTTP 网关，免费版无直连地址故不走 pg 协议） |

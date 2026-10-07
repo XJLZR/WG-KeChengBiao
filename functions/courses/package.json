@@ -1,0 +1,11 @@
+{
+  "name": "wg-courses-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WG课程表 GET /api/courses 读接口（Day 17）",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {}
+}

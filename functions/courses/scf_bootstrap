@@ -1,0 +1,4 @@
+#!/bin/bash
+# CloudBase Web 函数启动脚本：与 Day 15 的 health 函数同款
+# 注意：此文件必须是 LF 行尾、无扩展名，打包 zip 时一并带上
+node index.js
