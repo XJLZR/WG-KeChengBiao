@@ -27,6 +27,7 @@ const TIMEOUT_MS = 8000;
 //   GET    → Authorization + Accept
 //   DELETE → 仅 Authorization
 //   POST   → Authorization + Content-Type + Prefer(return=minimal)
+//   PATCH  → 同 POST（Day 22 新增：部分更新主表字段）
 // errorPrefix：出错时加在错误信息前的动作说明（如「删除旧数据失败」），
 // 用于保持重构前 500 响应文案不变（会透传进 SERVER_ERROR 的 message）
 async function rdbRequest(path, { method = 'GET', query = {}, body, errorPrefix = '' } = {}) {
@@ -36,7 +37,7 @@ async function rdbRequest(path, { method = 'GET', query = {}, body, errorPrefix 
 
   const headers = { Authorization: `Bearer ${API_KEY}` };
   if (method === 'GET') headers.Accept = 'application/json';
-  if (method === 'POST') {
+  if (method === 'POST' || method === 'PATCH') {
     headers['Content-Type'] = 'application/json';
     headers.Prefer = 'return=minimal';
   }

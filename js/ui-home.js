@@ -190,6 +190,10 @@ function renderCourseCard(course, settings, now, options) {
     `<p class="course-card__meta">${escapeHtml(metaParts.join(' · '))}</p>` +
     `</div>` +
     statusTag +
+    /* Day 22：删除入口。样式压到最小（小字灰色），真误触还有确认弹窗挡一道；
+       课程 id 里可能带中文和括号，data 属性必须过 escapeHtml */
+    `<button class="course-card__delete" type="button" data-id="${escapeHtml(course.id)}"` +
+    ` aria-label="删除课程 ${escapeHtml(course.name)}">删除</button>` +
     `</article>`
   );
 }
@@ -581,6 +585,110 @@ function initCourseFilter() {
   });
 }
 
+/* ---------- 删除课程（Day 22 新增） ----------
+   入口：今日视图与搜索结果卡片上的「删除」小按钮（周视图格子空间太小，不放）。
+   流程：点删除 → 确认弹窗（二次确认）→ 调公网 DELETE 接口 → 重新拉全量课表重画。
+   后端是真删除（无回收站），所以确认弹窗文案必须写清恢复代价。
+   ------------------------------------------------------------------ */
+
+/**
+ * 调 DELETE /api/courses/:id（契约 3.5）。
+ * 成功返回；失败抛 { message }，message 优先用服务端的中文说明（如「课程不存在」）。
+ */
+async function apiDeleteCourse(courseId) {
+  let resp;
+  try {
+    resp = await fetch(`${API_BASE_URL}/api/courses/${encodeURIComponent(courseId)}`, {
+      method: 'DELETE',
+    });
+  } catch (err) {
+    console.error('[删除] 接口请求失败：', err);
+    throw { message: '连不上课程服务器，请检查网络后重试' };
+  }
+
+  /* DELETE 成功/失败都有 JSON 包络；平台层故障可能是空响应体，读不到就兜底 */
+  let body = null;
+  try {
+    body = await resp.json();
+  } catch (err) { /* 空响应体，走下面的兜底文案 */ }
+
+  if (!resp.ok || !body || body.ok !== true) {
+    const serverMessage = body && body.error && body.error.message;
+    throw { message: serverMessage || '服务器删除失败，请稍后重试' };
+  }
+}
+
+/**
+ * 确认后的实际删除：弹「正在删除」→ DELETE → 重新读全量课表重画 → 弹「删除成功」。
+ * 中途任何一步失败都弹「删除失败」并把服务端中文说明带给用户。
+ * 删除成功后重新 readLocalData：数据库少了一条，页面所有视图（今日/周/搜索）都要跟上。
+ */
+async function performDeleteCourse(courseId) {
+  showStatusModal({ type: 'loading', title: '正在删除课程…' });
+
+  try {
+    await apiDeleteCourse(courseId);
+
+    try {
+      const data = await readLocalData();
+      renderPage(data.courses, data.settings);
+    } catch (refreshError) {
+      /* 删除已生效、只是重画失败：如实告知，别谎报成功也别把页面打入错误页 */
+      console.error('[删除] 删除成功但刷新课表失败：', refreshError);
+      showStatusModal({
+        type: 'success',
+        title: '删除成功',
+        desc: '课程已删除，但刷新课表失败，请点右上角「刷新」。',
+      });
+      return;
+    }
+
+    showStatusModal({
+      type: 'success',
+      title: '删除成功',
+      desc: '这门课已从课表中移除。',
+    });
+  } catch (error) {
+    console.error('[删除] 删除失败：', error);
+    showStatusModal({
+      type: 'error',
+      title: '删除失败',
+      desc: (error && error.message) || '请稍后重试。',
+    });
+  }
+}
+
+/**
+ * 接上两张课程列表（今日视图 + 搜索结果）的删除按钮。
+ * 卡片是 innerHTML 整体重画的，按钮监听用「事件委托」绑在容器上，
+ * 重画多少次都不用重新绑。
+ */
+function initCourseDelete() {
+  ['course-list', 'search-list'].forEach((listId) => {
+    const list = document.getElementById(listId);
+    if (!list) return;
+
+    list.addEventListener('click', (event) => {
+      const btn = event.target.closest('.course-card__delete');
+      if (!btn) return;
+
+      const courseId = btn.dataset.id;
+      /* 课程名从卡片里取，避免再查一遍数据；courseId 找不到课程名时兜底用 id */
+      const card = btn.closest('.course-card');
+      const nameEl = card && card.querySelector('.course-card__name');
+      const courseName = (nameEl && nameEl.textContent) || courseId;
+
+      showConfirmModal({
+        title: '删除这门课？',
+        desc: `《${courseName}》将从课表中删除。删除后不能撤销，需重新导入课表才能恢复。`,
+        confirmText: '确认删除',
+        cancelText: '取消',
+        onConfirm: () => performDeleteCourse(courseId),
+      });
+    });
+  });
+}
+
 /* ---------- 首页级过程状态（PRD V1.7 加载中 / V1.8 读取失败） ---------- */
 
 /**
@@ -808,4 +916,5 @@ initViewSwitch();
 initCourseFilter();
 initRetryButton();
 initRefreshButton();
+initCourseDelete();
 bootstrap();

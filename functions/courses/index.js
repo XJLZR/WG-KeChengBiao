@@ -1,5 +1,5 @@
 // ============================================================
-// 课程接口（Day 17 GET 读 + Day 18 POST 导入写，契约 api-contract.md 3.2 / 3.3）
+// 课程接口（Day 17 GET 读 + Day 18 POST 导入写 + Day 22 PATCH 改，契约 3.2/3.3/3.4）
 // Day 19 分层重构：本文件只保留「接口层」职责——接请求（读参数/请求体、校验）、
 // 调数据访问层函数、返响应（统一 { ok, data, error } 包络，契约 2.1）。
 // 所有数据库操作已迁至 repositories/（本文件不再出现网关 URL 和 fetch）：
@@ -15,11 +15,15 @@ const http = require('http');
 const { hasApiKey } = require('./repositories/rdbClient');
 const {
   fetchCourses,
+  fetchCourseById,
+  patchCourse,
+  deleteCourseById,
   toCourse,
   toDbRow,
   deleteAllCourses,
   insertCourses,
 } = require('./repositories/coursesRepository');
+const { insertWeeks, deleteWeeksByCourseId } = require('./repositories/courseWeeksRepository');
 
 // 监听端口必须与控制台「函数配置 → 监听端口」一致（Day 15 实测：不一致网关 65 秒超时返回 450）
 const PORT = 9000;
@@ -263,6 +267,171 @@ async function handleImport(req, res) {
   }
 }
 
+// ============================================================
+// Day 22：PATCH /api/courses/:id —— 修改课程（部分更新，契约 3.4）
+// ============================================================
+
+// 可修改字段白名单（契约 3.4）：除 id 外的全部字段。
+// 字符串字段带长度上限（与导入校验一致，防超长打穿数据库列宽）
+const PATCHABLE_STRINGS = {
+  name: 64,
+  location: 64,
+  teacher: 64,
+  className: 64,
+  scheduleDate: 32,
+  courseOrder: 32,
+  type: 32,
+};
+const PATCHABLE_HINT = 'name, weekday, periods, location, teacher, weeks, className, scheduleDate, courseOrder, type';
+
+// 校验 PATCH 请求体：必须是对象、至少一个字段、字段都在白名单内、类型合法。
+// 不合法返回中文错误信息，合法返回 null
+function validatePatchBody(body) {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return '请求体必须是 JSON 对象，如 { "location": "教A-105" }';
+  }
+  const keys = Object.keys(body);
+  if (keys.length === 0) {
+    return '请求体不能为空，至少传一个要修改的字段';
+  }
+  for (const key of keys) {
+    if (key === 'id') {
+      return 'id 不可修改（id 是课程标识，改动会使外部引用失效）';
+    }
+    if (key in PATCHABLE_STRINGS) {
+      const value = body[key];
+      if (typeof value !== 'string') {
+        return `字段 ${key} 必须是字符串`;
+      }
+      if (value.length > PATCHABLE_STRINGS[key]) {
+        return `字段 ${key} 超过 ${PATCHABLE_STRINGS[key]} 字上限`;
+      }
+    } else if (key === 'weekday') {
+      if (!Number.isInteger(body[key]) || body[key] < 1 || body[key] > 7) {
+        return '字段 weekday（星期）必须是 1-7 的整数';
+      }
+    } else if (key === 'periods') {
+      const value = body[key];
+      if (!Array.isArray(value) || value.length === 0) {
+        return '字段 periods（节次）必须是非空数组';
+      }
+      if (!value.every((p) => Number.isInteger(p) && p >= 1)) {
+        return '字段 periods 必须是正整数数组，如 [6,7]';
+      }
+    } else if (key === 'weeks') {
+      const value = body[key];
+      if (!Array.isArray(value) || value.length === 0) {
+        return '字段 weeks（周次）必须是非空数组';
+      }
+      if (!value.every((w) => Number.isInteger(w) && w >= 1 && w <= 30)) {
+        return '字段 weeks 必须是 1-30 的整数数组';
+      }
+    } else {
+      return `不支持修改字段 ${key}（可修改: ${PATCHABLE_HINT}）`;
+    }
+  }
+  return null;
+}
+
+// 请求体（契约 camelCase）→ 数据库行形状（snake_case）的子集。
+// weeks 不进主表：它拆存在 course_weeks 子表，由 handlePatch 走「删旧插新」
+function toDbPatch(body) {
+  const row = {};
+  if (body.name !== undefined) row.name = body.name;
+  if (body.weekday !== undefined) row.weekday = body.weekday;
+  if (body.periods !== undefined) row.periods = body.periods;
+  if (body.location !== undefined) row.location = body.location;
+  if (body.teacher !== undefined) row.teacher = body.teacher;
+  if (body.className !== undefined) row.class_name = body.className;
+  if (body.scheduleDate !== undefined) row.schedule_date = body.scheduleDate;
+  if (body.courseOrder !== undefined) row.course_order = body.courseOrder;
+  if (body.type !== undefined) row.type = body.type;
+  return row;
+}
+
+async function handlePatch(req, res, id) {
+  const raw = await readBody(req);
+  let body;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    fail(res, 400, 'BAD_REQUEST', '请求体不是合法的 JSON');
+    return;
+  }
+
+  const invalidReason = validatePatchBody(body);
+  if (invalidReason) {
+    console.log(`[patch ${id}] 校验拒绝: ${invalidReason}`);
+    fail(res, 400, 'BAD_REQUEST', invalidReason);
+    return;
+  }
+
+  if (!hasApiKey()) {
+    fail(res, 500, 'SERVER_ERROR', '服务端未配置数据库凭据（RDB_API_KEY）');
+    return;
+  }
+
+  // 先验 id 存在性（契约 3.4：不存在的 id 返回 NOT_FOUND）
+  const existing = await fetchCourseById(id);
+  if (!existing) {
+    fail(res, 404, 'NOT_FOUND', `课程不存在: ${id}，请确认 id 是否正确`);
+    return;
+  }
+
+  // 主表字段与 weeks 分开处理：
+  //   主表 → 一条 PATCH；weeks → 子表删旧插新（嵌套更新网关不支持，同 Day 18 拆步）
+  const mainFields = toDbPatch(body);
+  try {
+    if (Object.keys(mainFields).length > 0) {
+      await patchCourse(id, mainFields);
+    }
+    if (body.weeks !== undefined) {
+      await deleteWeeksByCourseId(id);
+      const weekRows = body.weeks.map((week) => ({ course_id: id, week }));
+      await insertWeeks(weekRows);
+    }
+    console.log(`[patch ${id}] 更新完成: ${Object.keys(body).join(', ')}`);
+  } catch (err) {
+    console.error(`[patch ${id}] 更新失败: ${err.message}`);
+    fail(res, 500, 'SERVER_ERROR', `课程修改失败: ${err.message}`);
+    return;
+  }
+
+  // 读回完整对象返回（PATCH 本身网关回空体，取不到更新后的值）
+  const updatedRow = await fetchCourseById(id);
+  ok(res, { updated: toCourse(updatedRow) });
+}
+
+// ============================================================
+// Day 22：DELETE /api/courses/:id —— 删除课程（契约 3.5）
+// ============================================================
+
+// 删除比修改危险（删错没有撤销键），所以同样先验 id 存在性，不存在的 id 返回 404。
+// course_weeks 子表由外键级联删除，这里只删主表一行
+async function handleDelete(res, id) {
+  if (!hasApiKey()) {
+    fail(res, 500, 'SERVER_ERROR', '服务端未配置数据库凭据（RDB_API_KEY）');
+    return;
+  }
+
+  const existing = await fetchCourseById(id);
+  if (!existing) {
+    fail(res, 404, 'NOT_FOUND', `课程不存在: ${id}，请确认 id 是否正确`);
+    return;
+  }
+
+  try {
+    await deleteCourseById(id);
+    console.log(`[delete ${id}] 删除完成（course_weeks 已级联删除）`);
+  } catch (err) {
+    console.error(`[delete ${id}] 删除失败: ${err.message}`);
+    fail(res, 500, 'SERVER_ERROR', `课程删除失败: ${err.message}`);
+    return;
+  }
+
+  ok(res, { deletedId: id });
+}
+
 // ---------- HTTP 路由 ----------
 
 const server = http.createServer((req, res) => {
@@ -302,6 +471,32 @@ const server = http.createServer((req, res) => {
       console.error('[import] unexpected error:', err.message);
       fail(res, 500, 'SERVER_ERROR', '服务端异常，请稍后重试');
     });
+    return;
+  }
+
+  // Day 22：/api/courses/:id —— PATCH 修改 / DELETE 删除（契约 3.4 / 3.5）。id 从路径段取，需 URL 解码
+  const courseIdMatch = path.match(/^\/api\/courses\/([^/]+)$/);
+  if (courseIdMatch) {
+    const id = decodeURIComponent(courseIdMatch[1]);
+    if (req.method === 'PATCH') {
+      handlePatch(req, res, id).catch((err) => {
+        if (err.code === 'BAD_REQUEST' && err.statusCode === 400) {
+          fail(res, 400, 'BAD_REQUEST', err.message);
+          return;
+        }
+        console.error('[patch] unexpected error:', err.message);
+        fail(res, 500, 'SERVER_ERROR', '服务端异常，请稍后重试');
+      });
+      return;
+    }
+    if (req.method === 'DELETE') {
+      handleDelete(res, id).catch((err) => {
+        console.error('[delete] unexpected error:', err.message);
+        fail(res, 500, 'SERVER_ERROR', '服务端异常，请稍后重试');
+      });
+      return;
+    }
+    fail(res, 405, 'METHOD_NOT_ALLOWED', '本路径只接受 PATCH 或 DELETE 请求');
     return;
   }
 

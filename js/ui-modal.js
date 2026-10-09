@@ -108,3 +108,82 @@ function closeStatusModal() {
     statusModalRoot.classList.add('is-hidden');
   }
 }
+
+/* ============================================================
+   确认弹窗（Day 22 新增）—— 「再问一遍」的双按钮弹窗
+   对应：Day 22 任务「前端删除操作加二次确认」
+
+   为什么不复用上面的状态弹窗：状态弹窗的关闭规则是「点任意处关闭」，
+   那套规则对删除这种危险操作不合适 —— 手滑碰到页面任何地方都不该
+   等于作出决定。确认弹窗必须明确按下「取消」或「确认」其中一个。
+
+   对外暴露：
+     showConfirmModal({ title, desc, confirmText, cancelText, onConfirm })
+     closeConfirmModal()
+   按取消 / 确认都会关掉弹窗；onConfirm 在确认时调用。
+   ============================================================ */
+
+/* 单例根节点，与状态弹窗各自独立（两套弹窗可能先后出现，但结构不同） */
+let confirmModalRoot = null;
+
+/** 第一次调用时把确认弹窗骨架插到 body 末尾，之后复用 */
+function ensureConfirmModalRoot() {
+  if (confirmModalRoot) {
+    return confirmModalRoot;
+  }
+  confirmModalRoot = document.createElement('div');
+  confirmModalRoot.className = 'modal-mask is-hidden';
+  confirmModalRoot.setAttribute('role', 'dialog');
+  confirmModalRoot.setAttribute('aria-modal', 'true');
+  /* 结构是静态文本，用 innerHTML 安全；课程名等动态内容走 textContent */
+  confirmModalRoot.innerHTML = [
+    '<div class="modal-card">',
+    '  <p class="modal-card__title"></p>',
+    '  <p class="modal-card__desc"></p>',
+    '  <div class="modal-card__actions">',
+    '    <button class="btn btn--ghost modal-card__btn-cancel" type="button">取消</button>',
+    '    <button class="btn btn--danger modal-card__btn-confirm" type="button">确认</button>',
+    '  </div>',
+    '</div>',
+  ].join('');
+  document.body.appendChild(confirmModalRoot);
+  return confirmModalRoot;
+}
+
+/**
+ * 显示确认弹窗。title/desc 必填（desc 里要写清后果，比如「删除后需重新导入才能恢复」）；
+ * confirmText / cancelText 不传时用默认「确认 / 取消」；
+ * onConfirm 在用户按下确认按钮时调用（取消则只关弹窗，不调用任何回调）。
+ */
+function showConfirmModal(options) {
+  const root = ensureConfirmModalRoot();
+  const titleEl = root.querySelector('.modal-card__title');
+  const descEl = root.querySelector('.modal-card__desc');
+  const cancelBtn = root.querySelector('.modal-card__btn-cancel');
+  const confirmBtn = root.querySelector('.modal-card__btn-confirm');
+
+  /* 动态内容一律 textContent：课程名里有特殊字符也只显示成文字（与状态弹窗同一口径） */
+  titleEl.textContent = (options && options.title) || '确认操作';
+  descEl.textContent = (options && options.desc) || '';
+  cancelBtn.textContent = (options && options.cancelText) || '取消';
+  confirmBtn.textContent = (options && options.confirmText) || '确认';
+
+  /* 用 onclick 赋值而不是 addEventListener：重复显示时自动覆盖上一次的回调，
+     不会出现「第一次点确认删了 A，第二次点确认把 B 也删了」的叠监听问题 */
+  cancelBtn.onclick = () => closeConfirmModal();
+  confirmBtn.onclick = () => {
+    closeConfirmModal();
+    if (typeof (options && options.onConfirm) === 'function') {
+      options.onConfirm();
+    }
+  };
+
+  root.classList.remove('is-hidden');
+}
+
+/** 关掉确认弹窗。幂等。 */
+function closeConfirmModal() {
+  if (confirmModalRoot) {
+    confirmModalRoot.classList.add('is-hidden');
+  }
+}

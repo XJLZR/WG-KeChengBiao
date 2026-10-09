@@ -15,4 +15,14 @@ async function insertWeeks(weekRows) {
   });
 }
 
-module.exports = { insertWeeks };
+// 删某门课程的全部周次行（Day 22 PATCH 用：改 weeks 字段时先删旧再插新）。
+// 只删单门课程的子行，不动其他课程
+async function deleteWeeksByCourseId(courseId) {
+  await rdbRequest('course_weeks', {
+    method: 'DELETE',
+    query: { course_id: `eq.${courseId}` },
+    errorPrefix: '删除旧周次失败',
+  });
+}
+
+module.exports = { insertWeeks, deleteWeeksByCourseId };

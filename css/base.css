@@ -444,6 +444,33 @@ button {
   color: var(--color-text-sub);
 }
 
+/* ---------- 确认弹窗（Day 22）：双按钮的「再问一遍」弹窗 ---------- */
+/* 按钮区铺满卡片宽度，取消在左、危险操作在右（与系统对话框习惯一致） */
+.modal-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.modal-card__actions .btn {
+  flex: 1;
+}
+
+/* 危险操作按钮：删除确认用。红色取自失败图标的红（#b3352b），视觉语言一致 */
+.btn--danger {
+  background: #b3352b;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.btn--danger:hover {
+  background: #9c2f26;
+}
+
+.btn--danger:active {
+  background: #852821;
+}
+
 /* 用户在系统里开了「减少动态效果」就全静止：
    卡片不播入场动画，加载圈不转（留一个静止的圈，与 V1.7 的处理一致） */
 @media (prefers-reduced-motion: reduce) {

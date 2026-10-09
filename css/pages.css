@@ -204,6 +204,29 @@
   white-space: nowrap;
 }
 
+/* Day 22：卡片上的「删除」入口。
+   有意压到最小（无边框无底色的小字）：删除是低频危险操作，入口要「找得到但别抢眼」；
+   真点了也不会立刻删 —— 背后还有一层确认弹窗（ui-modal.js showConfirmModal）。
+   灰色用 --color-text-sub（与说明文字同档），按下时变红提示「这是危险动作」。 */
+.course-card__delete {
+  flex: 0 0 auto;
+  padding: 2px var(--space-2);
+  border: none;
+  background: none;
+  font-size: var(--font-xs);
+  color: var(--color-text-sub);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.course-card__delete:hover {
+  color: #b3352b;
+}
+
+.course-card__delete:active {
+  color: #852821;
+}
+
 /* Day 9：改前是 #7b828c 压在 #eceff2 上，只有 3.36:1。
    现在用统一的次要文字色，在同样的灰底上是 4.70:1。 */
 .course-card__status--ended {

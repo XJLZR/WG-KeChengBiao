@@ -20,6 +20,28 @@ async function fetchCourses(limit) {
   return rdbRequest('courses', { method: 'GET', query });
 }
 
+// 按 id 查单条课程（Day 22 PATCH 用：改前验存在性、改后读回完整对象）。
+// 查不到返回 null，由接口层转成 NOT_FOUND
+async function fetchCourseById(id) {
+  const rows = await rdbRequest('courses', {
+    method: 'GET',
+    query: { select: '*,course_weeks(week)', id: `eq.${id}` },
+  });
+  return rows.length > 0 ? rows[0] : null;
+}
+
+// 按 id 部分更新主表字段（Day 22 PATCH，契约 3.4）。
+// patch 是数据库行形状的子集（调用方已完成白名单校验和 camelCase→snake_case 映射）。
+// 返回值不解析（网关对 PATCH 成功回空体，同 DELETE/POST），改后的数据由调用方重新 GET 读回
+async function patchCourse(id, patch) {
+  await rdbRequest('courses', {
+    method: 'PATCH',
+    query: { id: `eq.${id}` },
+    body: patch,
+    errorPrefix: '更新课程失败',
+  });
+}
+
 // 网关行 → 契约 2.3 课程对象：snake_case 列名映射回 camelCase（契约 2.4 要点 2），
 // 嵌套的 course_weeks 数组拍平成 weeks
 function toCourse(row) {
@@ -58,6 +80,17 @@ function toDbRow(course) {
   };
 }
 
+// 按 id 删除单条课程（Day 22 DELETE，契约 3.5）。
+// 子表 course_weeks 靠外键 ON DELETE CASCADE（Day 16 建表）自动级联删除，无需单独删。
+// 是否真删了由接口层先验存在性再调用本函数保证（网关对删 0 行也回 200，无法靠返回值区分）
+async function deleteCourseById(id) {
+  await rdbRequest('courses', {
+    method: 'DELETE',
+    query: { id: `eq.${id}` },
+    errorPrefix: '删除课程失败',
+  });
+}
+
 // 删除全部旧课程。外键 course_weeks.course_id ON DELETE CASCADE（Day 16 建表），
 // 删 courses 一张表即级联清空 course_weeks。
 // 加恒真过滤 id=not.is.null：显式表明意图，也防网关/PostgREST 拒绝无过滤的全表 DELETE
@@ -86,4 +119,4 @@ async function insertCourses(dbRows) {
   }
 }
 
-module.exports = { fetchCourses, toCourse, toDbRow, deleteAllCourses, insertCourses };
+module.exports = { fetchCourses, fetchCourseById, patchCourse, deleteCourseById, toCourse, toDbRow, deleteAllCourses, insertCourses };
