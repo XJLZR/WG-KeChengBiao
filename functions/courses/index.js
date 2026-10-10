@@ -252,7 +252,8 @@ async function handleImport(req, res) {
     console.log('[import] 旧课程已删除（course_weeks 级联清空）');
   } catch (err) {
     console.error(`[import] 失败于删除阶段: ${err.message}`);
-    fail(res, 500, 'SERVER_ERROR', `数据替换失败（旧数据未动）: ${err.message}`);
+    /* 用户只看人话；英文细节走 console.error 给开发者查 */
+    fail(res, 500, 'SERVER_ERROR', '数据替换失败，旧数据未受影响，请稍后重试');
     return;
   }
 
@@ -263,7 +264,7 @@ async function handleImport(req, res) {
     ok(res, { imported: dbRows.length });
   } catch (err) {
     console.error(`[import] 失败于写入阶段: ${err.message}`);
-    fail(res, 500, 'SERVER_ERROR', `旧课程已清空但新课程写入失败，请重新导入: ${err.message}`);
+    fail(res, 500, 'SERVER_ERROR', '导入失败：旧课程已清空但新课程未能写入，请重新导入');
   }
 }
 
@@ -393,7 +394,7 @@ async function handlePatch(req, res, id) {
     console.log(`[patch ${id}] 更新完成: ${Object.keys(body).join(', ')}`);
   } catch (err) {
     console.error(`[patch ${id}] 更新失败: ${err.message}`);
-    fail(res, 500, 'SERVER_ERROR', `课程修改失败: ${err.message}`);
+    fail(res, 500, 'SERVER_ERROR', '课程修改失败，请稍后重试');
     return;
   }
 
@@ -425,7 +426,7 @@ async function handleDelete(res, id) {
     console.log(`[delete ${id}] 删除完成（course_weeks 已级联删除）`);
   } catch (err) {
     console.error(`[delete ${id}] 删除失败: ${err.message}`);
-    fail(res, 500, 'SERVER_ERROR', `课程删除失败: ${err.message}`);
+    fail(res, 500, 'SERVER_ERROR', '课程删除失败，请稍后重试');
     return;
   }
 
