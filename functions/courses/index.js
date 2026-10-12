@@ -304,6 +304,11 @@ function validatePatchBody(body) {
       if (typeof value !== 'string') {
         return `字段 ${key} 必须是字符串`;
       }
+      // Day 24 修复（B2-5c）：name 与 POST 导入校验（validateCourseItem）同规则，
+      // 空串/纯空格视同「没填课程名」，不能写库。location 等可选字段空串是合法语义（空=「无」），不在此列
+      if (key === 'name' && value.trim() === '') {
+        return '字段 name（课程名）不能为空';
+      }
       if (value.length > PATCHABLE_STRINGS[key]) {
         return `字段 ${key} 超过 ${PATCHABLE_STRINGS[key]} 字上限`;
       }
