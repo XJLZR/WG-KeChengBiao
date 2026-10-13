@@ -62,13 +62,13 @@ cd /d D:\WG课程表
 **第 3 步：启动静态服务器**
 
 ```cmd
-C:\Users\Administrator\.workbuddy\binaries\python\versions\3.13.12\python.exe -m http.server 8001
+C:\Users\Administrator\.workbuddy\binaries\python\versions\3.13.12\python.exe -m http.server 8012
 ```
 
 **启动成功的标志** —— 出现下面这一行，然后光标停住不动：
 
 ```
-Serving HTTP on :: port 8001 (http://[::]:8001/) ...
+Serving HTTP on :: port 8012 (http://[::]:8012/) ...
 ```
 
 **光标停住是正常的**：它在等待访问请求，不是在卡死。**这个窗口在停止服务前不要关闭。**
@@ -80,7 +80,7 @@ Serving HTTP on :: port 8001 (http://[::]:8001/) ...
 浏览器地址栏输入：
 
 ```
-http://localhost:8001
+http://localhost:8012
 ```
 
 打开后应看到（对照检查）：
@@ -136,10 +136,10 @@ http://localhost:8001
 ```cmd
 cd /d "D:\vibe coding 学习\.workbuddy\tools\day8-verify"
 set NODE_PATH=C:\Users\Administrator\.workbuddy\binaries\node\workspace\node_modules
-"C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-3\node.exe" state-check.js "http://127.0.0.1:8001/index.html"
+"C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-3\node.exe" state-check.js "http://127.0.0.1:8012/index.html"
 ```
 
-（跑之前首页服务器要在 8001 端口开着；脚本会逐条打印 PASS / FAIL。）
+（跑之前首页服务器要在 8012 端口开着；脚本会逐条打印 PASS / FAIL。）
 
 ## 六、常见问题排查
 
