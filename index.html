@@ -26,6 +26,7 @@
     <a class="app-nav__item is-active" href="./index.html">今日</a>
     <a class="app-nav__item" href="./import.html">导入</a>
     <a class="app-nav__item" href="./settings.html">设置</a>
+    <a class="app-nav__item" href="./entry.html">换课表</a>
   </nav>
 
   <main class="app-main">
@@ -164,6 +165,9 @@
     <section class="card empty-state state-error is-hidden" id="state-error">
       <p class="state-error__title">没能读到课表数据</p>
       <p class="empty-state__desc" id="state-error-reason"></p>
+      <!-- Day 25：口令相关失败（课表不存在/口令没设/格式不对）才显示的出口，
+           与「重试」不同——重试解决网络问题，换口令解决「进错了课表」 -->
+      <a class="btn btn--ghost is-hidden" id="state-error-entry" href="./entry.html">换课表口令</a>
       <button class="btn btn--primary" type="button" id="state-error-retry">重试</button>
     </section>
   </main>
@@ -173,6 +177,8 @@
        必须排在 ui-home.js 之前 -->
   <!-- Day 20：mock-data.js 已整份删除，首页数据改为运行时调用云函数公网接口
        （GET {API_BASE_URL}/api/courses，见 ui-home.js 的 readLocalData） -->
+  <!-- Day 25：口令模块最先加载（ui-home.js 的读写都要带上口令），顺序不能反 -->
+  <script src="./js/schedule-code.js"></script>
   <script src="./js/ui-modal.js"></script>
   <script src="./js/schedule.js"></script>
   <script src="./js/ui-home.js"></script>

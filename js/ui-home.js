@@ -715,12 +715,17 @@ function showPageState(stateId) {
 /* 读取失败的原因文案（TECH_DESIGN 6.1 第 1 条：用户看中文说明，
    技术细节只进 console.error）。code 由数据层抛出，「重试」也修不好的情况
    才这样写；其余情况落到兜底文案。
-   Day 20：数据源从本机换成公网接口，文案里的「本机」口径同步改掉。 */
+   Day 20：数据源从本机换成公网接口，文案里的「本机」口径同步改掉。
+   Day 25：新增口令相关三码——它们不是网络问题，「重试」修不好，
+   出口是去入口页核对/更换口令（state-error-entry 链接，见 showReadError）。 */
 const READ_ERROR_TEXT = {
   NETWORK_ERROR: '连不上课程服务器，请检查网络后重试',
   SERVER_ERROR: '课程服务器出了问题，请稍后重试',
   DATA_CORRUPT: '服务器返回的数据结构不完整，可能被改动过',
   DATA_VERSION_UNSUPPORTED: '服务器数据的版本比当前页面新，请刷新页面后重试',
+  SCHEDULE_NOT_FOUND: '课表不存在或口令输入有误，请核对口令',
+  INVALID_CODE: '课表口令格式不对，请回入口页重新设置',
+  MISSING_CODE: '还没有设置课表口令，请先到入口页创建或输入',
 };
 
 /**
@@ -733,6 +738,12 @@ function showReadError(error) {
 
   document.getElementById('state-error-reason').textContent =
     (error && READ_ERROR_TEXT[error.code]) || '读取课表数据时出错，请稍后重试';
+
+  /* Day 25：口令相关失败给「换课表口令」出口——重试解决不了进错课表的问题。
+     与 V1.8 同卡片的第二个按钮，只在口令三码时出现。 */
+  const codeRelated = error && ['SCHEDULE_NOT_FOUND', 'INVALID_CODE', 'MISSING_CODE'].includes(error.code);
+  const entryLink = document.getElementById('state-error-entry');
+  if (entryLink) entryLink.classList.toggle('is-hidden', !codeRelated);
 
   showPageState('state-error');
 }
@@ -763,9 +774,16 @@ let lastFetchTime = null;
  *   DATA_CORRUPT  —— 响应体不是合法 JSON，或包络 / courses 结构不对
  */
 async function readLocalData() {
+  /* Day 25：请求带上课表口令（契约 2.5）。没设置口令不发注定 400 的请求，直接去入口页 */
+  const requestUrl = apiUrlWithCode(`${API_BASE_URL}/api/courses`);
+  if (!requestUrl) {
+    window.location.replace('./entry.html');
+    throw { code: 'MISSING_CODE' };
+  }
+
   let resp;
   try {
-    resp = await fetch(`${API_BASE_URL}/api/courses`);
+    resp = await fetch(requestUrl);
   } catch (err) {
     console.error('[首页] 接口请求失败：', err);
     throw { code: 'NETWORK_ERROR', cause: err };
@@ -830,6 +848,15 @@ function renderPage(courses, settings) {
  *   读不完才让加载页出现。
  */
 async function bootstrap() {
+  /* Day 25：分享链接 ?code= 优先——带着链接来的人意图明确，存下就用；
+     没有任何口令说明是第一次打开，去入口页创建/输入，本页无从读起 */
+  const urlCode = scheduleCodeFromUrl();
+  if (urlCode) setScheduleCode(urlCode);
+  if (!getScheduleCode()) {
+    window.location.replace('./entry.html');
+    return;
+  }
+
   showPageState(null);
   clearTimeout(loadingTimer);
   loadingTimer = setTimeout(() => showPageState('state-loading'), LOADING_DELAY_MS);

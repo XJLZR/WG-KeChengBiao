@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>WG课程表 · 选择课表</title>
+
+  <!-- 样式复用主站（./ 相对路径，部署在子路径下） -->
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/pages.css">
+</head>
+
+<body>
+  <header class="app-header">
+    <h1 class="app-header__title">WG课程表</h1>
+  </header>
+
+  <nav class="app-nav">
+    <a class="app-nav__item" href="./index.html">今日</a>
+    <a class="app-nav__item" href="./import.html">导入</a>
+    <a class="app-nav__item" href="./settings.html">设置</a>
+    <a class="app-nav__item is-active" href="./entry.html">换课表</a>
+  </nav>
+
+  <main class="app-main">
+    <!-- ============================================================
+         当前口令（浏览器里已保存时显示）
+         ============================================================ -->
+    <section class="card is-hidden" id="current-card">
+      <p class="section-title">当前课表口令</p>
+      <p class="entry-code" id="current-code">——</p>
+      <div class="action-row">
+        <a class="btn btn--primary" href="./index.html">进入这个课表</a>
+        <button class="btn btn--ghost" type="button" id="clear-btn">清除，换别的课表</button>
+      </div>
+      <p class="page-note">
+        清除后本机就不再记住这个口令；课表数据仍在云端，凭口令随时能回来。
+      </p>
+    </section>
+
+    <!-- ============================================================
+         创建新课表：自动生成口令（Day 25 拍板：不支持自定义）
+         ============================================================ -->
+    <section class="card" id="create-card">
+      <p class="section-title">创建新课表</p>
+      <p class="page-note">
+        自动生成一个专属口令。口令就是这份课表的钥匙：请截图或抄下来保存——
+        丢了就要重新创建、重新导入课程。
+      </p>
+      <div class="action-row" id="create-start-row">
+        <button class="btn btn--primary" type="button" id="create-btn">生成我的课表口令</button>
+      </div>
+      <div id="create-result" hidden>
+        <p class="entry-code" id="new-code">——</p>
+        <div class="action-row">
+          <button class="btn btn--primary" type="button" id="confirm-create-btn">我已保存，进入新课表</button>
+          <button class="btn btn--ghost" type="button" id="regen-btn">重新生成一个</button>
+        </div>
+        <p class="page-note">
+          下一步：到「导入」页上传教务导出的课表文件，课表就有内容了。
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         输入口令：进入已有课表（自己换设备回来，或看同学分享的课表）
+         ============================================================ -->
+    <section class="card" id="input-card">
+      <p class="section-title">用口令进入已有课表</p>
+      <p class="page-note">
+        输入口令就能查看（和修改）那份课表。别人分享的链接（带
+        <span style="white-space:nowrap">?code=</span>）会自动进入，不需要手动输。
+      </p>
+      <div class="action-row code-input-row">
+        <input class="code-input" id="code-input" type="text"
+               inputmode="latin" autocomplete="off" spellcheck="false"
+               maxlength="6" placeholder="6 位口令，如 K7M2QX" aria-label="课表口令">
+        <button class="btn btn--primary" type="button" id="enter-btn">进入</button>
+      </div>
+      <p class="page-note" id="input-feedback" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <!-- 口令模块先加载（ui-entry.js 要用它的存取与生成函数），顺序不能反 -->
+  <script src="./js/schedule-code.js"></script>
+  <script src="./js/ui-entry.js"></script>
+</body>
+
+</html>

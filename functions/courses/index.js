@@ -10,6 +10,9 @@
 // 经 PG HTTP 网关（PostgREST 语法）访问——免费版无直连地址，详见 rdbClient.js 注释
 // Day 18 导入：整体替换 + 整批校验，替换分三步（删旧→插主表→插子表），
 //   中途失败会记日志并如实返回，见 handleImport 内注释
+// Day 25 课表口令（契约 2.5，拍板方案 B）：全部课程接口必填 ?code=，
+//   读写范围收窄到该口令名下；导入写入时服务端为每条 id 加口令前缀
+//   （同班同学导入同一份文件会产生相同原始 id，无前缀会在全局主键上相撞）
 // ============================================================
 const http = require('http');
 const { hasApiKey } = require('./repositories/rdbClient');
@@ -20,7 +23,7 @@ const {
   deleteCourseById,
   toCourse,
   toDbRow,
-  deleteAllCourses,
+  deleteCoursesByCode,
   insertCourses,
 } = require('./repositories/coursesRepository');
 const { insertWeeks, deleteWeeksByCourseId } = require('./repositories/courseWeeksRepository');
@@ -30,6 +33,44 @@ const PORT = 9000;
 
 // limit 查询参数上限（余力加练，契约 3.2）
 const LIMIT_MAX = 500;
+
+// ---------- 课表口令（Day 25，契约 2.5） ----------
+
+// 6 位大写字母数字，去掉易混淆的 0/O/1/I（与前端 js/schedule-code.js 同一份规则）
+const CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/;
+
+/**
+ * 解析并校验 ?code= 课表口令（所有课程接口的第一道关）。
+ * 合法返回 { code }；不合法返回 { error }，由调用方转成统一包络的失败响应。
+ */
+function parseCode(searchParams) {
+  const raw = searchParams.get('code');
+  if (raw === null) {
+    return {
+      error: {
+        status: 400,
+        code: 'MISSING_CODE',
+        message: '缺少课表口令：请先在入口页创建或输入口令（请求需携带 ?code= 参数）',
+      },
+    };
+  }
+  const code = raw.trim().toUpperCase();   // 容忍小写输入，统一转大写
+  if (!CODE_PATTERN.test(code)) {
+    return {
+      error: {
+        status: 400,
+        code: 'INVALID_CODE',
+        message: '课表口令格式不对：应为 6 位大写字母或数字（不含 0、O、1、I）',
+      },
+    };
+  }
+  return { code };
+}
+
+/** parseCode 失败时的统一出口 */
+function failCode(res, parsed) {
+  fail(res, parsed.error.status, parsed.error.code, parsed.error.message);
+}
 
 // ---------- 响应工具（统一包络，契约 2.1） ----------
 
@@ -70,6 +111,14 @@ function parseLimit(searchParams) {
 }
 
 async function handleCourses(res, searchParams) {
+  /* 口令先行：没有合法口令，后面什么都不查（契约 2.5） */
+  const parsed = parseCode(searchParams);
+  if (parsed.error) {
+    failCode(res, parsed);
+    return;
+  }
+  const code = parsed.code;
+
   const { limit, invalid } = parseLimit(searchParams);
   if (invalid) {
     fail(res, 400, 'BAD_REQUEST', `limit 必须是 1-${LIMIT_MAX} 的整数`);
@@ -80,8 +129,17 @@ async function handleCourses(res, searchParams) {
     return;
   }
 
-  const rows = await fetchCourses(limit);
+  const rows = await fetchCourses(limit, code);
   const courses = rows.map(toCourse);
+
+  /* 口令名下 0 门课 = 口令不存在（契约 2.5「口令存在」的定义）。
+     返回 SCHEDULE_NOT_FOUND 而不是空列表：口令打错不能让用户误以为
+     「课表是空的还没导入」（与 V1.5 空课表区分是同一条原则）。 */
+  if (courses.length === 0) {
+    fail(res, 404, 'SCHEDULE_NOT_FOUND', '课表不存在或口令输入有误，请核对后重试');
+    return;
+  }
+
   ok(res, { courses, count: courses.length });
 }
 
@@ -214,18 +272,26 @@ function validateImportBody(courses) {
 
 // ---------- 导入处理主流程 ----------
 
-async function handleImport(req, res) {
+async function handleImport(req, res, searchParams) {
+  /* 口令先行：新口令 = 创建课表，老口令 = 替换该口令（契约 2.5 / 3.3） */
+  const parsed = parseCode(searchParams);
+  if (parsed.error) {
+    failCode(res, parsed);
+    return;
+  }
+  const code = parsed.code;
+
   const raw = await readBody(req);
 
-  let parsed;
+  let parsedBody;
   try {
-    parsed = JSON.parse(raw);
+    parsedBody = JSON.parse(raw);
   } catch {
     fail(res, 400, 'BAD_REQUEST', '请求体不是合法的 JSON');
     return;
   }
-  const courses = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-    ? parsed.courses
+  const courses = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody)
+    ? parsedBody.courses
     : undefined;
   if (courses === undefined) {
     fail(res, 400, 'BAD_REQUEST', '请求体缺少 courses 字段');
@@ -247,9 +313,10 @@ async function handleImport(req, res) {
 
   // 已知风险（计划里向主人说明过）：两步不是数据库事务，中间失败会写一半。
   // 缓解：校验已全部前置通过，此处只剩网关故障级别的意外；失败时如实告知进度
+  // Day 25：删除范围从「全库」收窄到「该口令名下」，其他口令的数据不受影响
   try {
-    await deleteAllCourses();
-    console.log('[import] 旧课程已删除（course_weeks 级联清空）');
+    await deleteCoursesByCode(code);
+    console.log(`[import] 口令 ${code} 的旧课程已删除（course_weeks 级联清空）`);
   } catch (err) {
     console.error(`[import] 失败于删除阶段: ${err.message}`);
     /* 用户只看人话；英文细节走 console.error 给开发者查 */
@@ -258,9 +325,10 @@ async function handleImport(req, res) {
   }
 
   try {
-    const dbRows = courses.map(toDbRow);
+    /* Day 25：写入时服务端统一加口令前缀（CODE-原id），见 toDbRow */
+    const dbRows = courses.map((course) => toDbRow(course, code));
     await insertCourses(dbRows);
-    console.log(`[import] 写入完成: ${dbRows.length} 条课程`);
+    console.log(`[import] 写入完成: ${dbRows.length} 条课程（口令 ${code}）`);
     ok(res, { imported: dbRows.length });
   } catch (err) {
     console.error(`[import] 失败于写入阶段: ${err.message}`);
@@ -355,7 +423,15 @@ function toDbPatch(body) {
   return row;
 }
 
-async function handlePatch(req, res, id) {
+async function handlePatch(req, res, id, searchParams) {
+  /* 口令先行：只在该口令范围内找这门课（契约 3.4，Day 25） */
+  const parsed = parseCode(searchParams);
+  if (parsed.error) {
+    failCode(res, parsed);
+    return;
+  }
+  const code = parsed.code;
+
   const raw = await readBody(req);
   let body;
   try {
@@ -377,10 +453,11 @@ async function handlePatch(req, res, id) {
     return;
   }
 
-  // 先验 id 存在性（契约 3.4：不存在的 id 返回 NOT_FOUND）
-  const existing = await fetchCourseById(id);
+  // 先验 id 存在性（契约 3.4：不存在的 id 返回 NOT_FOUND）。
+  // Day 25：按 id + code 双条件查——别人的口令查不到你的课，id 泄露也不够
+  const existing = await fetchCourseById(id, code);
   if (!existing) {
-    fail(res, 404, 'NOT_FOUND', `课程不存在: ${id}，请确认 id 是否正确`);
+    fail(res, 404, 'NOT_FOUND', `课程不存在: ${id}（请核对课程 id 与课表口令是否正确）`);
     return;
   }
 
@@ -389,7 +466,7 @@ async function handlePatch(req, res, id) {
   const mainFields = toDbPatch(body);
   try {
     if (Object.keys(mainFields).length > 0) {
-      await patchCourse(id, mainFields);
+      await patchCourse(id, code, mainFields);
     }
     if (body.weeks !== undefined) {
       await deleteWeeksByCourseId(id);
@@ -404,7 +481,7 @@ async function handlePatch(req, res, id) {
   }
 
   // 读回完整对象返回（PATCH 本身网关回空体，取不到更新后的值）
-  const updatedRow = await fetchCourseById(id);
+  const updatedRow = await fetchCourseById(id, code);
   ok(res, { updated: toCourse(updatedRow) });
 }
 
@@ -413,22 +490,30 @@ async function handlePatch(req, res, id) {
 // ============================================================
 
 // 删除比修改危险（删错没有撤销键），所以同样先验 id 存在性，不存在的 id 返回 404。
-// course_weeks 子表由外键级联删除，这里只删主表一行
-async function handleDelete(res, id) {
+// course_weeks 子表由外键级联删除，这里只删主表一行。
+// Day 25：查找与删除都限定在该口令名下
+async function handleDelete(res, id, searchParams) {
+  const parsed = parseCode(searchParams);
+  if (parsed.error) {
+    failCode(res, parsed);
+    return;
+  }
+  const code = parsed.code;
+
   if (!hasApiKey()) {
     fail(res, 500, 'SERVER_ERROR', '服务端未配置数据库凭据（RDB_API_KEY）');
     return;
   }
 
-  const existing = await fetchCourseById(id);
+  const existing = await fetchCourseById(id, code);
   if (!existing) {
-    fail(res, 404, 'NOT_FOUND', `课程不存在: ${id}，请确认 id 是否正确`);
+    fail(res, 404, 'NOT_FOUND', `课程不存在: ${id}（请核对课程 id 与课表口令是否正确）`);
     return;
   }
 
   try {
-    await deleteCourseById(id);
-    console.log(`[delete ${id}] 删除完成（course_weeks 已级联删除）`);
+    await deleteCourseById(id, code);
+    console.log(`[delete ${id}] 删除完成（口令 ${code}，course_weeks 已级联删除）`);
   } catch (err) {
     console.error(`[delete ${id}] 删除失败: ${err.message}`);
     fail(res, 500, 'SERVER_ERROR', '课程删除失败，请稍后重试');
@@ -468,7 +553,7 @@ const server = http.createServer((req, res) => {
       fail(res, 405, 'METHOD_NOT_ALLOWED', '本接口只接受 POST 请求');
       return;
     }
-    handleImport(req, res).catch((err) => {
+    handleImport(req, res, url.searchParams).catch((err) => {
       // readBody 超限时已带 400 语义，直接透传；其余按服务端异常兜底
       if (err.code === 'BAD_REQUEST' && err.statusCode === 400) {
         fail(res, 400, 'BAD_REQUEST', err.message);
@@ -485,7 +570,7 @@ const server = http.createServer((req, res) => {
   if (courseIdMatch) {
     const id = decodeURIComponent(courseIdMatch[1]);
     if (req.method === 'PATCH') {
-      handlePatch(req, res, id).catch((err) => {
+      handlePatch(req, res, id, url.searchParams).catch((err) => {
         if (err.code === 'BAD_REQUEST' && err.statusCode === 400) {
           fail(res, 400, 'BAD_REQUEST', err.message);
           return;
@@ -496,7 +581,7 @@ const server = http.createServer((req, res) => {
       return;
     }
     if (req.method === 'DELETE') {
-      handleDelete(res, id).catch((err) => {
+      handleDelete(res, id, url.searchParams).catch((err) => {
         console.error('[delete] unexpected error:', err.message);
         fail(res, 500, 'SERVER_ERROR', '服务端异常，请稍后重试');
       });

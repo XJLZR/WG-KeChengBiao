@@ -16,11 +16,12 @@
     <h1 class="app-header__title">WG课程表 · 检查台</h1>
   </header>
 
-  <!-- 检查台是调试页，不进主导航；顶部导航条保持三页互通，方便跳回去 -->
+  <!-- 检查台是调试页，不进主导航；顶部导航条保持互通，方便跳回去 -->
   <nav class="app-nav">
     <a class="app-nav__item" href="./index.html">今日</a>
     <a class="app-nav__item" href="./import.html">导入</a>
     <a class="app-nav__item" href="./settings.html">设置</a>
+    <a class="app-nav__item" href="./entry.html">换课表</a>
   </nav>
 
   <main class="app-main">
@@ -55,7 +56,9 @@
     </section>
   </main>
 
-  <!-- 检查台脚本内联在本页：它是一次性调试页，不进 js/ 五文件主流程体系 -->
+  <!-- 检查台脚本内联在本页：它是一次性调试页，不进 js/ 主流程体系。
+       Day 25：口令模块要先用（读写都要带 ?code=），必须排在内联脚本之前 -->
+  <script src="./js/schedule-code.js"></script>
   <script>
     /* 云函数公网地址（与 js/ui-home.js 的 API_BASE_URL 保持一致） */
     const API_BASE_URL =
@@ -115,12 +118,28 @@
         healthEl.textContent = `❌ 异常：${err.message}`;
       }
 
-      /* ---------- ② courses ---------- */
+      /* ---------- ② courses（Day 25：按本机保存的口令读） ---------- */
       coursesEl.textContent = '读取中…';
       listEl.innerHTML = '';
-      try {
-        const resp = await fetch(`${API_BASE_URL}/api/courses`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const requestUrl = apiUrlWithCode(`${API_BASE_URL}/api/courses`);
+      if (!requestUrl) {
+        currentCourses = null;
+        coursesEl.textContent = '❌ 本机没有保存课表口令，请先到「换课表」页创建或输入口令';
+      } else try {
+        const resp = await fetch(requestUrl);
+        if (!resp.ok) {
+          /* 口令不存在（404）与真正的故障（5xx）分开说，别混成一句「失败」 */
+          let msg = `HTTP ${resp.status}`;
+          try {
+            const errBody = await resp.json();
+            if (errBody && errBody.error && errBody.error.code === 'SCHEDULE_NOT_FOUND') {
+              msg = '该口令名下没有课表（口令不存在，或还没导入课程）';
+            } else if (errBody && errBody.error && errBody.error.message) {
+              msg = errBody.error.message;
+            }
+          } catch (e) { /* 空响应体，用 HTTP 码 */ }
+          throw new Error(msg);
+        }
         const body = await resp.json();
         if (!body || body.ok !== true || !body.data || !Array.isArray(body.data.courses)) {
           throw new Error('响应包络或 courses 结构不对');
@@ -161,7 +180,13 @@
       resultEl.textContent = '正在写入…';
 
       try {
-        const resp = await fetch(`${API_BASE_URL}/api/courses/import`, {
+        const postUrl = apiUrlWithCode(`${API_BASE_URL}/api/courses/import`);
+        if (!postUrl) {
+          resultEl.textContent = '❌ 本机没有保存课表口令，无法定位写入目标（先到「换课表」页设置）';
+          btn.disabled = false;
+          return;
+        }
+        const resp = await fetch(postUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ courses: currentCourses }),

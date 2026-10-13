@@ -595,3 +595,45 @@
   color: var(--color-text-sub);
   line-height: 1.8;
 }
+
+/* ============================================================
+   入口页 entry.html（Day 25 课表口令，契约 2.5）
+   ============================================================ */
+
+/* 口令大字展示：字距拉开方便逐位抄写核对，等宽字体让每位占宽一致 */
+.entry-code {
+  margin: var(--space-3) 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  font-family: 'Courier New', Consolas, monospace;
+  color: var(--color-text);
+}
+
+/* 口令输入行：输入框 + 进入按钮横排（与 course-filter 同一套触摸目标规则） */
+.code-input-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+/* 口令输入框：等宽字体（与展示一致），自动转大写后仍按大写渲染 */
+.code-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;              /* 触摸目标 ≥40px */
+  padding: var(--space-2) var(--space-3);
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: var(--font-md, 18px);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.code-input:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+  border-color: var(--color-brand);
+}

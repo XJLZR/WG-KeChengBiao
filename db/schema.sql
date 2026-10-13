@@ -21,7 +21,8 @@ DROP TABLE IF EXISTS courses CASCADE;
 -- 课程主表：一行 = 契约 2.3 的一条课程记录
 -- ------------------------------------------------------------
 CREATE TABLE courses (
-  id            VARCHAR(128) PRIMARY KEY,
+  id            VARCHAR(160) PRIMARY KEY,
+  code          VARCHAR(12)  NOT NULL DEFAULT '',
   name          VARCHAR(64)  NOT NULL,
   weekday       SMALLINT     NOT NULL,
   periods       JSONB        NOT NULL,
@@ -34,13 +35,12 @@ CREATE TABLE courses (
   CONSTRAINT chk_courses_weekday CHECK (weekday BETWEEN 1 AND 7)
 );
 
--- ------------------------------------------------------------
--- 周次明细表：一行 = 某门课的某个周次（weeks 数组的展开）
--- id 由数据库自增分配；(course_id, week) 唯一约束防止重复插入同一周
--- ------------------------------------------------------------
+-- 口令过滤是每个请求都要走的路（api-contract.md 2.5，Day 25）
+CREATE INDEX idx_courses_code ON courses (code);
+
 CREATE TABLE course_weeks (
   id        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  course_id VARCHAR(128) NOT NULL,
+  course_id VARCHAR(160) NOT NULL,
   week      SMALLINT     NOT NULL,
   CONSTRAINT uq_course_week UNIQUE (course_id, week),
   CONSTRAINT chk_course_weeks_week CHECK (week BETWEEN 1 AND 30),
@@ -52,8 +52,9 @@ CREATE TABLE course_weeks (
 -- ============================================================
 -- 字段注释（可对照 api-contract.md 2.3 节）
 -- ============================================================
-COMMENT ON TABLE  courses IS '课程主表：一行 = api-contract.md 2.3 的一条课程记录';
-COMMENT ON COLUMN courses.id            IS '课程唯一标识，由「星期-节次串-课程名-地点」拼接（契约：id）';
+COMMENT ON TABLE  courses IS '课程主表：一行 = api-contract.md 2.3 的一条课程记录；多用户隔离靠 code 口令（2.5，Day 25）';
+COMMENT ON COLUMN courses.id            IS '课程唯一标识 = 口令前缀 + 「星期-节次串-课程名-地点」（契约：id；Day 25 起服务端导入时加口令前缀）';
+COMMENT ON COLUMN courses.code          IS '课表口令（2.5）：6 位大写字母数字，去掉 0/O/1/I；接口按它过滤读写';
 COMMENT ON COLUMN courses.name          IS '课程名（契约：name，必填）';
 COMMENT ON COLUMN courses.weekday       IS '星期 1-7，1 = 周一（契约：weekday，必填）';
 COMMENT ON COLUMN courses.periods       IS '节次数组 JSON，如 [6,7]（契约：periods，必填；留 JSONB 因为只做展示）';
