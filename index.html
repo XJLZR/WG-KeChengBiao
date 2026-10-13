@@ -189,8 +189,9 @@
        必须排在 ui-home.js 之前 -->
   <!-- Day 20：mock-data.js 已整份删除，首页数据改为运行时调用云函数公网接口
        （GET {API_BASE_URL}/api/courses，见 ui-home.js 的 readLocalData） -->
-  <!-- Day 25：口令模块最先加载（ui-home.js 的读写都要带上口令），顺序不能反 -->
+  <!-- Day 25：口令与设置两个共享模块最先加载（ui-home.js 读写都要用），顺序不能反 -->
   <script src="./js/schedule-code.js"></script>
+  <script src="./js/settings-store.js"></script>
   <script src="./js/ui-modal.js"></script>
   <script src="./js/schedule.js"></script>
   <script src="./js/ui-home.js"></script>

@@ -17,7 +17,6 @@
     <h1 class="app-header__title">设置</h1>
   </header>
 
-  <!-- 页面导航：三个页面共用的跳转入口（Day 10 从视口底部挪到这里，与首页保持一致） -->
   <nav class="app-nav">
     <a class="app-nav__item" href="./index.html">今日</a>
     <a class="app-nav__item" href="./import.html">导入</a>
@@ -27,44 +26,61 @@
 
   <main class="app-main">
     <!-- ============================================================
-         V3.1 常规设置（本阶段实现外观骨架）
-         PRD 说：① 学期第一周周一的日期 ② 节次时间表（第 1–12 节起止时间）
-         本阶段不接存储、不可编辑（属 T8）
+         V3.1 常规设置（Day 25 · T8 接线）
+         改动先落在表单里，点「保存设置」才写入本机（localStorage）；
+         保存成功后回首页/周视图即按新值计算。
          ============================================================ -->
     <section class="card">
       <p class="section-title">学期设置</p>
 
-      <div class="setting-row">
-        <span class="setting-row__label">学期第一周周一</span>
-        <span class="setting-row__value">2026-08-31</span>
+      <div class="setting-row setting-row--field">
+        <label class="setting-row__label" for="setting-semester-start">学期第一周周一</label>
+        <input class="setting-row__input" id="setting-semester-start" type="date" value="2026-08-31">
       </div>
+      <p class="page-note">必须是周一——周数从这一天起算，选别的日子全学期周数会错位。</p>
 
-      <div class="setting-row">
-        <span class="setting-row__label">节次时间表</span>
-        <span class="setting-row__value">第 1–12 节</span>
-      </div>
+      <p class="section-title" style="margin-top:16px">节次时间表（第 1–12 节）</p>
+      <!-- 12 行起止时间由 js/ui-settings.js 按当前设置生成 -->
+      <div id="period-times"></div>
     </section>
 
+    <div class="action-row">
+      <button class="btn btn--primary" type="button" id="setting-save-btn">保存设置</button>
+      <button class="btn btn--ghost" type="button" id="setting-reset-btn">恢复默认作息</button>
+    </div>
+
     <!-- ============================================================
-         V3.2 数据管理（本阶段只放按钮外观，不绑定行为）
-         PRD 说：导出备份 / 导入备份 / 导出课表日历（.ics）/ 清空全部数据（二次确认）
+         V3.2 数据管理（Day 25 · T8）
+         导出/导入备份 = 当前口令名下的课程 + 本机设置，打包成一个
+         JSON 文件（含隐私，勿外传、不入 Git）。导入目标 = 当前口令。
+         「导出课表日历（.ics）」属 T10（下一任务），按钮先占位禁用。
          ============================================================ -->
     <section class="card">
       <p class="section-title">数据管理</p>
 
       <div class="action-row">
-        <button class="btn btn--ghost" type="button" disabled>导出备份</button>
-        <button class="btn btn--ghost" type="button" disabled>导入备份</button>
-        <button class="btn btn--ghost" type="button" disabled>导出课表日历（.ics）</button>
-        <button class="btn btn--danger" type="button" disabled>清空全部数据</button>
+        <button class="btn btn--ghost" type="button" id="setting-export-btn">导出备份</button>
+        <button class="btn btn--ghost" type="button" id="setting-import-btn">导入备份</button>
+        <input type="file" id="setting-import-file" accept=".json,application/json" hidden>
+        <button class="btn btn--ghost" type="button" id="setting-ics-btn" disabled
+                title="属 T10，下一任务实现">导出课表日历（.ics）</button>
+        <button class="btn btn--danger" type="button" id="setting-clear-btn">清空全部数据</button>
       </div>
 
       <p class="page-note">
-        设置页功能尚未接入，当前为页面骨架（对应 PRD 第 7 节 T1）。
-        数据只保存在这台设备的浏览器里，不会上传到任何服务器。
+        备份 = 当前口令名下的课程 + 本机设置，存成一个 JSON 文件；
+        导入会把文件里的课程恢复到**当前口令**名下、覆盖本机设置。
+        「清空全部数据」= 清空当前口令名下的全部课程 + 设置恢复默认，
+        清空前会二次确认。
       </p>
     </section>
   </main>
+
+  <!-- 弹窗组件先加载，ui-settings.js 要用它做成功/失败/确认反馈 -->
+  <script src="./js/schedule-code.js"></script>
+  <script src="./js/settings-store.js"></script>
+  <script src="./js/ui-modal.js"></script>
+  <script src="./js/ui-settings.js"></script>
 </body>
 
 </html>

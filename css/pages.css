@@ -587,6 +587,43 @@
   color: #b3352b;
 }
 
+/* ---------- 设置页表单（Day 25 · T8：V3.1 从展示骨架升级为可编辑） ---------- */
+
+/* 带输入框的设置行：标签左、输入右，与既有 .setting-row 同一套布局 */
+.setting-row--field {
+  gap: var(--space-2);
+}
+
+.setting-row__input {
+  min-height: 40px;              /* 触摸目标 ≥40px */
+  width: 160px;
+  padding: var(--space-2) var(--space-2);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.setting-row__input:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+  border-color: var(--color-brand);
+}
+
+/* 节次时间输入：比日期窄一档，两枚并排 */
+.setting-row__input--time {
+  width: 72px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 起止之间的短横线 */
+.setting-row__dash {
+  color: var(--color-text-sub);
+}
+
 /* 页面底部的说明文字（导入页 / 设置页共用） */
 .page-note {
   margin-top: var(--space-4);

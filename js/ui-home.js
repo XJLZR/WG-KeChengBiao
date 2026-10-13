@@ -100,7 +100,7 @@ function formatFetchTime(date) {
   return `${date.getMonth() + 1}月${date.getDate()}日 ${hh}:${mm}:${ss}`;
 }
 
-/* ---------- 数据源（Day 20） ---------- */
+/* ---------- 数据源（Day 20；设置来源 Day 25 · T8 改为本机设置） ---------- */
 
 /* 云函数公网地址（api-contract.md 第 1 节 Base URL）。
    跨域由网关侧 CORS 白名单放行：本页部署域名 + 本地调试 http://127.0.0.1:8012，
@@ -108,29 +108,11 @@ function formatFetchTime(date) {
 const API_BASE_URL =
   'https://wg-kechengbiao-d9gi92b9ma9e7f71c-1501303146.ap-shanghai.app.tcloudbase.com';
 
-/* 设置数据（TECH_DESIGN 3.2）。
-   数据库只存课程（Day 16 两表），「学期起点 + 作息时间表」暂无接口，
-   先以默认常量形式放在前端——数值与原 mock 版一致（一版通用作息，
-   真实作息待确认，见 TECH_DESIGN 第 10 节待确认项 1）。
-   它只影响「第 N 周」「状态标签」「下一节课」算得准不准，不影响课表数据本身。 */
-const DEFAULT_SETTINGS = {
-  semesterStart: '2026-08-31',   // 学期第一周周一
-  periodTimes: [
-    { start: '08:00', end: '08:45' },  // 第 1 节
-    { start: '08:50', end: '09:35' },  // 第 2 节
-    { start: '09:50', end: '10:35' },  // 第 3 节
-    { start: '10:40', end: '11:25' },  // 第 4 节
-    { start: '14:00', end: '14:45' },  // 第 5 节
-    { start: '14:50', end: '15:35' },  // 第 6 节
-    { start: '15:50', end: '16:35' },  // 第 7 节
-    { start: '16:40', end: '17:25' },  // 第 8 节
-    { start: '19:00', end: '19:45' },  // 第 9 节
-    { start: '19:50', end: '20:35' },  // 第 10 节
-    { start: '20:40', end: '21:25' },  // 第 11 节
-    { start: '21:30', end: '22:15' },  // 第 12 节
-  ],
-  schemaVersion: 1,
-};
+/* 设置数据：T8 起由 js/settings-store.js 统一管理——
+   存浏览器本机（localStorage），没设过/坏了自动落到默认作息。
+   数据库只存课程（Day 16 两表），设置不上云（Day 25 拍板 B）。
+   它只影响「第 N 周」「状态标签」「下一节课」算得准不准，不影响课表数据本身。
+   要改设置 → 设置页（settings.html，js/ui-settings.js）。 */
 
 /* ---------- 顶部信息条 ---------- */
 
@@ -819,7 +801,7 @@ async function readLocalData() {
   }
 
   lastFetchTime = new Date();   // 抓取完成时刻，renderPage() 里显示
-  return { courses: body.data.courses, settings: DEFAULT_SETTINGS };
+  return { courses: body.data.courses, settings: getSettings() };
 }
 
 /** 读取成功后，把首页三块内容都画出来 */
