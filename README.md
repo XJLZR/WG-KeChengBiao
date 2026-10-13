@@ -24,15 +24,27 @@
 | 阶段 | 产出 | 状态 |
 | --- | --- | --- |
 | 需求研究 | [`research.md`](./research.md) —— 同类产品对比、数据来源验证、范围划定 | ✅ 已完成 |
-| 产品需求文档 | [`PRD.md`](./PRD.md) —— 10 项 MVP 功能、页面视图、数据字段、41 条验收标准（v1.3） | ✅ 已完成 |
-| 技术设计 | [`TECH_DESIGN.md`](./TECH_DESIGN.md) + [`api-contract.md`](./api-contract.md) —— 原生前端 + CloudBase 云端（接口契约 v1.7 已加课表口令） | ✅ 已完成 |
-| 开发与上线 | 云端已上线（CloudBase 静态托管 + 云函数 + PostgreSQL），导入课表 / 课表口令多用户 / 周视图换周已可用 | 🚧 进行中（剩设置页、.ics 导出） |
+| 产品需求文档 | [`PRD.md`](./PRD.md) —— 10 项 MVP 功能、页面视图、数据字段、验收标准（v1.4） | ✅ 已完成 |
+| 技术设计 | [`TECH_DESIGN.md`](./TECH_DESIGN.md) + [`api-contract.md`](./api-contract.md) —— 原生前端 + CloudBase 云端（接口契约 v1.8 已加课表口令与设置上云） | ✅ 已完成 |
+| 开发与上线 | 云端已上线（CloudBase 静态托管 + 云函数 + PostgreSQL），导入课表 / 课表口令多用户 / 周视图换周 / 设置页（设置上云）/ .ics 导出已可用 | 🚧 进行中（剩真机验收） |
 
 ## 文档
 
 - [`research.md`](./research.md)：为什么这么做——问题、目标用户、三个同类产品对比、教务数据格式验证、想法改变、不做清单
 - [`PRD.md`](./PRD.md)：具体做什么——MVP 功能清单、页面与视图、数据字段与规则、任务拆解、逐条验收标准
 - [`AGENTS.md`](./AGENTS.md)：这个项目的工作规则（任务边界、交互方式、提交规范）
+
+## 发布前检查（verify-project Skill）
+
+每次发布 / 提交前跑一遍体检，8 个检查项全部来自本项目真实踩过的坑（Day 14–26），每项输出 `PASS / FAIL + 证据原文`，不做模糊判断：
+
+```bash
+node .workbuddy/skills/verify-project/checks/run-all.js
+```
+
+- 检查内容：密钥不入库、静态资源相对路径、页面脚本顺序、云函数健康、口令隔离、CORS 不重复、解析器幂等、文档口径一致——明细与「怎么算通过」见 [`.workbuddy/skills/verify-project/SKILL.md`](./.workbuddy/skills/verify-project/SKILL.md)
+- 也可以在对话里直接说「运行 verify-project」
+- 有任何一项 FAIL 就不可发布；改动检查项时先改 SKILL.md 的总表与期望顺序表
 
 ## 技术形态
 

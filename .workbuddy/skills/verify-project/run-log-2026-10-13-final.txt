@@ -1,0 +1,31 @@
+================================================================
+verify-project 发布前检查 —— 2026/10/13 20:11:05
+================================================================
+[PASS] 1. 密钥不入库
+       扫描 44 个文件（排除 .git/.workbuddy/samples/备份），密钥类模式命中 0 处
+[PASS] 2. 静态资源相对路径
+       扫描 5 个页面，根路径资源引用命中 0 处
+[PASS] 3. 页面脚本引用顺序
+       index.html：[schedule-code → settings-store → ui-modal → schedule → ui-home] ✓
+       import.html：[schedule-code → ui-modal → parser → ui-import] ✓
+       settings.html：[schedule-code → settings-store → ui-modal → ics → ui-settings] ✓
+       entry.html：[schedule-code → ui-entry] ✓
+       check.html：[schedule-code] ✓
+[PASS] 4. 云函数健康检查
+       GET https://wg-kechengbiao-d9gi92b9ma9e7f71c-1501303146.ap-shanghai.app.tcloudbase.com/api/health
+       HTTP 200
+       响应体前 200 字符：{"ok":true,"service":"wg-timetable","time":"2026-10-13T12:11:03.503Z"}
+[PASS] 5. 口令隔离生效
+       无 code → HTTP 400，error.code=MISSING_CODE
+       假 code → HTTP 404，error.code=SCHEDULE_NOT_FOUND
+[PASS] 6. CORS 头不重复
+       OPTIONS（Origin: https://wg-kechengbiao-d9gi92b9ma9e7f71c-1501303146.tcloudbaseapp.com）→ HTTP 204
+       Access-Control-Allow-Origin 出现 1 次，值：https://wg-kechengbiao-d9gi92b9ma9e7f71c-1501303146.tcloudbaseapp.com
+[PASS] 7. 解析器幂等
+       学生个人课表-列表展示导出 (2).xls：两次解析输出逐字节一致 ✓（输出长度 4085 字符）
+[PASS] 8. 文档口径一致
+       api-contract.md 最新版本：v1.8（变更表共 9 条）
+       README.md 含 v1.8
+       PRD.md 含 v1.8
+----------------------------------------------------------------
+结论：全部通过，可发布

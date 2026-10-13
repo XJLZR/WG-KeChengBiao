@@ -1,0 +1,33 @@
+================================================================
+verify-project 发布前检查 —— 2026/10/13 20:10:33
+================================================================
+[FAIL] 1. 密钥不入库
+       命中 1 处：
+       js\schedule-code.js:77  [sk- 开头疑似 API Key]  sk-abcdef1234567890...
+[FAIL] 2. 静态资源相对路径
+       以下为根路径引用（部署到子路径会 404）：
+       index.html:193  /css/fake.css
+[PASS] 3. 页面脚本引用顺序
+       index.html：[schedule-code → settings-store → ui-modal → schedule → ui-home] ✓
+       import.html：[schedule-code → ui-modal → parser → ui-import] ✓
+       settings.html：[schedule-code → settings-store → ui-modal → ics → ui-settings] ✓
+       entry.html：[schedule-code → ui-entry] ✓
+       check.html：[schedule-code] ✓
+[PASS] 4. 云函数健康检查
+       GET https://wg-kechengbiao-d9gi92b9ma9e7f71c-1501303146.ap-shanghai.app.tcloudbase.com/api/health
+       HTTP 200
+       响应体前 200 字符：{"ok":true,"service":"wg-timetable","time":"2026-10-13T12:10:31.588Z"}
+[PASS] 5. 口令隔离生效
+       无 code → HTTP 400，error.code=MISSING_CODE
+       假 code → HTTP 404，error.code=SCHEDULE_NOT_FOUND
+[PASS] 6. CORS 头不重复
+       OPTIONS（Origin: https://wg-kechengbiao-d9gi92b9ma9e7f71c-1501303146.tcloudbaseapp.com）→ HTTP 204
+       Access-Control-Allow-Origin 出现 1 次，值：https://wg-kechengbiao-d9gi92b9ma9e7f71c-1501303146.tcloudbaseapp.com
+[PASS] 7. 解析器幂等
+       学生个人课表-列表展示导出 (2).xls：两次解析输出逐字节一致 ✓（输出长度 4085 字符）
+[PASS] 8. 文档口径一致
+       api-contract.md 最新版本：v1.8（变更表共 9 条）
+       README.md 含 v1.8
+       PRD.md 含 v1.8
+----------------------------------------------------------------
+结论：2 项 FAIL，不可发布（逐条修完重跑）
