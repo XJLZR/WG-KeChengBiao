@@ -62,8 +62,7 @@
         <button class="btn btn--ghost" type="button" id="setting-export-btn">导出备份</button>
         <button class="btn btn--ghost" type="button" id="setting-import-btn">导入备份</button>
         <input type="file" id="setting-import-file" accept=".json,application/json" hidden>
-        <button class="btn btn--ghost" type="button" id="setting-ics-btn" disabled
-                title="属 T10，下一任务实现">导出课表日历（.ics）</button>
+        <button class="btn btn--ghost" type="button" id="setting-ics-btn">导出课表日历（.ics）</button>
         <button class="btn btn--danger" type="button" id="setting-clear-btn">清空全部数据</button>
       </div>
 
@@ -76,10 +75,12 @@
     </section>
   </main>
 
-  <!-- 弹窗组件先加载，ui-settings.js 要用它做成功/失败/确认反馈 -->
+  <!-- 弹窗组件先加载，ui-settings.js 要用它做成功/失败/确认反馈；
+       ics.js 是纯生成函数（无依赖），排在 ui-settings.js 之前即可 -->
   <script src="./js/schedule-code.js"></script>
   <script src="./js/settings-store.js"></script>
   <script src="./js/ui-modal.js"></script>
+  <script src="./js/ics.js"></script>
   <script src="./js/ui-settings.js"></script>
 </body>
 

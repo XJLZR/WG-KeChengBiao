@@ -31,6 +31,7 @@ function setupSettingsPage() {
   const exportBtn = document.getElementById('setting-export-btn');
   const importBtn = document.getElementById('setting-import-btn');
   const importFile = document.getElementById('setting-import-file');
+  const icsBtn = document.getElementById('setting-ics-btn');
   const clearBtn = document.getElementById('setting-clear-btn');
   if (!dateInput || !periodBox || !saveBtn) return;
 
@@ -167,9 +168,9 @@ function setupSettingsPage() {
     }
   });
 
-  /** 生成 JSON 文件并触发下载（Blob + 隐形链接，纯浏览器行为，不经服务器） */
-  function downloadJson(data, filename) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  /** 生成文本文件并触发下载（Blob + 隐形链接，纯浏览器行为，不经服务器） */
+  function downloadText(text, filename, mime) {
+    const blob = new Blob([text], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -178,6 +179,10 @@ function setupSettingsPage() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadJson(data, filename) {
+    downloadText(JSON.stringify(data, null, 2), filename, 'application/json');
   }
 
   /* ---------- ③ 导入备份 ---------- */
@@ -271,6 +276,52 @@ function setupSettingsPage() {
       });
     }
   }
+
+  /* ---------- 导出课表日历（.ics，Day 25 · T10） ---------- */
+
+  icsBtn.addEventListener('click', async () => {
+    icsBtn.disabled = true;
+    showStatusModal({ type: 'loading', title: '正在生成课表日历…' });
+
+    try {
+      const url = apiUrlWithCode(`${SETTINGS_API_BASE_URL}/api/courses`);
+      if (!url) {
+        window.location.replace('./entry.html');
+        return;
+      }
+      const resp = await fetch(url);
+      if (resp.status === 404) {
+        throw { message: '当前口令名下还没有课表，先去「导入」页导入课程。' };
+      }
+      if (!resp.ok) {
+        throw { message: '没能从云端读到当前课表，请稍后再试。' };
+      }
+      const body = await resp.json();
+      if (!body || body.ok !== true || !Array.isArray(body.data.courses)) {
+        throw { message: '云端返回的数据不完整，生成中止。' };
+      }
+
+      const courses = body.data.courses;
+      const eventCount = courses.reduce((n, c) => n + c.weeks.length, 0);
+      const text = generateIcs(courses, getSettings());
+      downloadText(text, '课表.ics', 'text/calendar;charset=utf-8');
+
+      showStatusModal({
+        type: 'success',
+        title: '日历已导出',
+        desc: `${courses.length} 门课展开为 ${eventCount} 个日程。` +
+          `点开下载的文件，按手机提示导入系统日历即可。`,
+      });
+    } catch (err) {
+      showStatusModal({
+        type: 'error',
+        title: '导出失败',
+        desc: (err && err.message) || '请稍后再试。',
+      });
+    } finally {
+      icsBtn.disabled = false;
+    }
+  });
 
   /* ---------- ④ 清空全部数据 ---------- */
 
