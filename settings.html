@@ -40,6 +40,7 @@
       <p class="page-note">必须是周一——周数从这一天起算，选别的日子全学期周数会错位。</p>
 
       <p class="section-title" style="margin-top:16px">节次时间表（第 1–12 节）</p>
+      <p class="page-note">点时间框弹出滚筒选择，分钟按 5 分钟一档；改完记得点「保存设置」。</p>
       <!-- 12 行起止时间由 js/ui-settings.js 按当前设置生成 -->
       <div id="period-times"></div>
     </section>
@@ -73,6 +74,27 @@
         清空前会二次确认。
       </p>
     </section>
+    <!-- ============================================================
+         时间滚筒选择器（Day 25 追加，用户反馈「手动输入太麻烦」）
+         点任一时间框弹出：上面两列滚轮（时 / 分），下面取消 + 确认。
+         分钟按 5 分钟一档（真实作息都在 5 的倍数上，滚动距离也短）。
+         平时隐藏，由 js/ui-settings.js 控制开关与回写。
+         ============================================================ -->
+    <div class="time-picker-mask is-hidden" id="time-picker" role="dialog" aria-label="选择时间">
+      <div class="time-picker">
+        <p class="time-picker__title" id="time-picker-title">选择时间</p>
+        <div class="time-picker__wheels">
+          <div class="time-picker__wheel" id="tp-wheel-hour" aria-label="小时"></div>
+          <div class="time-picker__wheel" id="tp-wheel-minute" aria-label="分钟"></div>
+          <!-- 中央选中带：纯视觉，压在两列滚轮上 -->
+          <div class="time-picker__band" aria-hidden="true"></div>
+        </div>
+        <div class="time-picker__actions">
+          <button class="btn btn--ghost" type="button" id="tp-cancel">取消</button>
+          <button class="btn btn--primary" type="button" id="tp-confirm">确认</button>
+        </div>
+      </div>
+    </div>
   </main>
 
   <!-- 弹窗组件先加载，ui-settings.js 要用它做成功/失败/确认反馈；

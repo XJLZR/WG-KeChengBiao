@@ -624,6 +624,96 @@
   color: var(--color-text-sub);
 }
 
+/* ---------- 时间滚筒选择器（Day 25 追加，用户反馈「手动输入太麻烦」） ---------- */
+
+/* 全屏遮罩 + 底部弹层（移动端惯例：拇指够得着确认键） */
+.time-picker-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.time-picker {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-3) var(--space-3);
+  background: var(--color-surface);
+  border-radius: 12px 12px 0 0;
+}
+
+.time-picker__title {
+  margin-bottom: var(--space-2);
+  text-align: center;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* 两列滚轮 + 中央选中带 */
+.time-picker__wheels {
+  position: relative;
+  display: flex;
+}
+
+.time-picker__wheel {
+  flex: 1;
+  height: 200px;                 /* 5 行 × 40px：上下各留 2 行缓冲，选中项恒在正中 */
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  padding: 80px 0;               /* 撑出首尾的滚动余量 */
+  scrollbar-width: none;         /* 隐藏滚动条，视觉就是纯滚筒 */
+}
+
+.time-picker__wheel::-webkit-scrollbar {
+  display: none;
+}
+
+.time-picker__item {
+  height: 40px;
+  line-height: 40px;
+  text-align: center;
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-sub);
+  scroll-snap-align: center;
+  cursor: pointer;
+}
+
+.time-picker__item.is-selected {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* 中央选中带：纯视觉指示，不挡滚动（pointer-events: none） */
+.time-picker__band {
+  position: absolute;
+  top: 50%;
+  left: var(--space-3);
+  right: var(--space-3);
+  height: 40px;
+  transform: translateY(-50%);
+  border-top: 1px solid var(--color-brand);
+  border-bottom: 1px solid var(--color-brand);
+  background: rgba(0, 0, 0, 0.03);
+  pointer-events: none;
+}
+
+/* 取消 / 确认：横排各占一半 */
+.time-picker__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.time-picker__actions .btn {
+  flex: 1;
+}
+
 /* 页面底部的说明文字（导入页 / 设置页共用） */
 .page-note {
   margin-top: var(--space-4);
