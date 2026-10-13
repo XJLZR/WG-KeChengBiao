@@ -28,9 +28,12 @@ const TIMEOUT_MS = 8000;
 //   DELETE → 仅 Authorization
 //   POST   → Authorization + Content-Type + Prefer(return=minimal)
 //   PATCH  → 同 POST（Day 22 新增：部分更新主表字段）
+// extraHeaders（Day 26 新增）：调用方追加/覆盖请求头——settings 表的 upsert
+//   需要 Prefer: resolution=merge-duplicates（PostgREST 主键冲突时改走更新），
+//   与默认的 return=minimal 以逗号合并成一个 Prefer 头。
 // errorPrefix：出错时加在错误信息前的动作说明（如「删除旧数据失败」），
 // 用于保持重构前 500 响应文案不变（会透传进 SERVER_ERROR 的 message）
-async function rdbRequest(path, { method = 'GET', query = {}, body, errorPrefix = '' } = {}) {
+async function rdbRequest(path, { method = 'GET', query = {}, body, errorPrefix = '', extraHeaders = {} } = {}) {
   const params = new URLSearchParams(query);
   const qs = params.toString();
   const url = `${RDB_BASE}/v1/rdb/rest/${path}${qs ? `?${qs}` : ''}`;
@@ -41,6 +44,7 @@ async function rdbRequest(path, { method = 'GET', query = {}, body, errorPrefix 
     headers['Content-Type'] = 'application/json';
     headers.Prefer = 'return=minimal';
   }
+  Object.assign(headers, extraHeaders);
 
   const resp = await fetch(url, {
     method,

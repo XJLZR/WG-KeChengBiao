@@ -93,7 +93,7 @@
 1. `weeks` 拆表：判断「这周有没有课」是高频查询，一行一个周次才能用 SQL 直接过滤；`periods` 只做展示，留 JSONB 不拆（两张表的对称性让位于查询价值）。
 2. 契约的 camelCase 字段落库转 snake_case，**映射由云函数在读写时承担**（Day 17 起），对前端契约保持 2.3 原样。
 3. 行级安全（RLS）暂未启用：本项目免鉴权，数据全走云函数服务端访问，浏览器不直连数据库；Day 17 写接口时按需评估。
-4. 脚本与迁移：全量图纸 `db/schema.sql`、种子 `db/seed.sql`（可重复执行）；建表迁移版本 `20261007052345_create_courses_and_course_weeks`；Day 25 迁移版本 `20261013141000_add_schedule_code`（加 `code` 列 + 索引、id 列宽 128→160）。
+4. 脚本与迁移：全量图纸 `db/schema.sql`、种子 `db/seed.sql`（可重复执行）；建表迁移版本 `20261007052345_create_courses_and_course_weeks`；Day 25 迁移版本 `20261013141000_add_schedule_code`（加 `code` 列 + 索引、id 列宽 128→160）；Day 26 迁移版本 `20261013190000_add_settings_table`（新建 `settings` 表，见 2.6）。
 
 ### 2.5 课表口令（Day 25 新增）
 
@@ -102,6 +102,22 @@
 - **隔离模型**：口令 = 房间号 + 钥匙合一。所有课程接口按 `code` 过滤，知道口令即可读写该课表；不同口令的数据互不可见。知道口令即拥有该课表的读写权，这是方案 B 的已知边界（校园场景够用）。
 - **id 前缀**：同班同学导入**同一份文件**会产生相同的原始 id（id = 星期-节次串-课程名-地点），而 id 是全局主键——服务端在导入写入时为每条 id 统一加口令前缀（`CODE-原始id`），保证不同口令永不相撞；同一口令重复导入 id 稳定不变。因此 2.4 的 id 列宽放宽到 160（6 位口令 + 1 连字符 + 原 id ≤128）。
 - **「口令存在」的定义**：该口令名下课程数 > 0。首次向新口令导入即「创建课表」，把某口令的课程清空后该口令视为不存在。
+
+### 2.6 设置对象（Settings，Day 26 新增）
+
+设置 = 学期起点 + 节次时间表，**跟随口令存云端**（Day 26 拍板：方案 B 存本机导致「微信里调好、换浏览器就丢」，改上云；localStorage 只作缓存）。
+
+```json
+{
+  "semesterStart": "2026-08-31",
+  "periodTimes": [ { "start": "08:00", "end": "08:45" }, "…共 12 项…" ]
+}
+```
+
+- `semesterStart`：学期第一周的**周一**日期（`YYYY-MM-DD`）。必须是周一——不是则全学期周数错位。
+- `periodTimes`：固定 12 项，每项 `start`/`end` 均为 `HH:MM`（24 小时制），`start < end`。
+- **存储**：`settings` 表，`code` 为主键（与课程同口径隔离）；该口令从未保存过设置时，读接口返回 `settings: null`，由前端用内置默认值兜底。
+- **与课程的关系**：设置独立于课程存在——新口令没导入课程也可以先保存设置；清空课程不动设置。
 
 ## 3. 接口清单
 
@@ -126,10 +142,10 @@
 - **成功响应**（HTTP 200）：
 
 ```json
-{ "ok": true, "data": { "courses": [ { "id": "…", "name": "…", "weekday": 3, "periods": [6,7], "location": "…", "teacher": "…", "weeks": [1,5] } ], "count": 42 } }
+{ "ok": true, "data": { "courses": [ { "id": "…", "name": "…", "weekday": 3, "periods": [6,7], "location": "…", "teacher": "…", "weeks": [1,5] } ], "count": 42, "settings": { "semesterStart": "2026-08-31", "periodTimes": [ … ] } } }
 ```
 
-- **字段说明**：`courses` 按星期、节次、课名升序排列；每条含 2.3 的全部契约字段（含 `className`/`scheduleDate`/`courseOrder`/`type` 解析保留字段）；`count` = 本次返回的课程条数
+- **字段说明**：`courses` 按星期、节次、课名升序排列；每条含 2.3 的全部契约字段（含 `className`/`scheduleDate`/`courseOrder`/`type` 解析保留字段）；`count` = 本次返回的课程条数。`settings`（**Day 26 新增**）= 该口令存的 2.6 设置对象，从未保存过则为 `null`（前端用默认值兜底）——首页一次请求同时拿到课程与设置，不再多发一趟
 - **错误**：`MISSING_CODE` / `INVALID_CODE` / `SCHEDULE_NOT_FOUND`（见上）、`BAD_REQUEST`（limit 非法）、`METHOD_NOT_ALLOWED`（非 GET）、`NOT_FOUND`（路径不匹配）、`SERVER_ERROR`（网关/数据库读取失败），见 2.2 错误码表
 - **实现载体**：CloudBase Web 函数 `courses`（Node.js 20，监听 9000 端口），经 HTTP 网关路由 `/api/courses`（已开路径透传、免鉴权）。数据访问走 **PG HTTP 网关**（PostgREST 语法）读 `courses` + `course_weeks` 两表并组装 `weeks` 数组——免费体验版共享集群无内网/外网直连地址（Day 17 实测配置页内网地址为空），pg 协议直连不可行，采用官方 HTTP API 兜底路径；鉴权用环境变量 `RDB_API_KEY`（API Key，service_role），不进代码仓库
 
@@ -169,6 +185,27 @@
 - **成功响应**（HTTP 200）：`{ "ok": true, "data": { "deletedId": "…" } }`
 - **错误**：`NOT_FOUND`（id 不存在）。
 
+### 3.6 GET /api/settings —— 读设置 ✅ 已实现（Day 26）
+
+- **URL**：必须携带 `?code=课表口令`（2.5）。缺少 → `MISSING_CODE`（400）；格式不对 → `INVALID_CODE`（400）
+- **成功响应**（HTTP 200，**该口令没存过设置也是 200**）：
+
+```json
+{ "ok": true, "data": { "settings": { "semesterStart": "2026-08-31", "periodTimes": [ … ] } } }
+```
+
+- **说明**：`settings` 为 2.6 设置对象；从未保存过 → `null`（前端用默认值兜底，不报错——「还没设置过」不是错误）。设置页打开时调它填表。
+- **错误**：`MISSING_CODE` / `INVALID_CODE`、`METHOD_NOT_ALLOWED`（非 GET）、`SERVER_ERROR`。
+
+### 3.7 PUT /api/settings —— 保存设置 ✅ 已实现（Day 26）
+
+- **URL**：必须携带 `?code=课表口令`（2.5）
+- **请求体**：2.6 设置对象（`semesterStart` + `periodTimes`）
+- **行为**：按口令 upsert（该口令有旧设置则整体覆盖，没有则新建）。保存前服务端逐项校验：`semesterStart` 是合法日期且**必须是周一**；`periodTimes` 恰 12 项、每项 `start`/`end` 为合法 `HH:MM` 且 `start < end`。任一不合法 → `BAD_REQUEST`（400），中文指明哪项错什么。
+- **成功响应**（HTTP 200）：`{ "ok": true, "data": { "saved": true } }`
+- **错误**：`MISSING_CODE` / `INVALID_CODE`、`BAD_REQUEST`（校验不过）、`METHOD_NOT_ALLOWED`（非 PUT）、`SERVER_ERROR`。
+- **设计注**：设置与课程完全独立——口令名下没有课程也允许保存设置；导入/删除课程不影响设置。
+
 ## 4. 本期明确不做的接口
 
 | 接口 | 不做的理由 |
@@ -188,3 +225,4 @@
 | 2026-10-09 | v1.5 | Day 22：3.3/3.4/3.5 标记已实现，增删改查闭环。PATCH：白名单校验（含 id 不可改）、weeks 改动走子表删旧插新、id 保持原值；DELETE：先验存在性，子表靠外键级联删除；两者不存在的 id 均返回 404 中文说明 |
 | 2026-10-12 | v1.6 | Day 24：3.4 补「`name` 不可置空（空串/纯空格按 BAD_REQUEST 拒绝）」——Day 24 测试清单 B2-5c 实测 PATCH 传空课名返回 200 并写库（POST 路径同规则本就有），属两条校验路径不一致，修复 `validatePatchBody` |
 | 2026-10-13 | v1.7 | Day 25 多用户改造（拍板方案 B「课表口令」）：新增 2.5 口令规格（6 位、去 0/O/1/I、不可自定义）；3.2/3.3/3.4/3.5 全部加必填 `?code=`；新增错误码 `MISSING_CODE`/`INVALID_CODE`/`SCHEDULE_NOT_FOUND`；import 从「替换全库」收窄为「替换该口令」，新口令=创建；服务端为 id 加口令前缀防同学同文件主键相撞；2.4 的 id/course_id 列宽 128→160 并给 courses.code 建索引；「课表分享链接」移出「不做」清单（`?code=` 即分享） |
+| 2026-10-13 | v1.8 | Day 26 设置上云（推翻 Day 25 的「设置存本机」拍板：用户实测微信内置浏览器与系统浏览器 localStorage 互不相通，设置无法跟随口令）：新增 2.6 设置对象与 `settings` 表（`code` 主键，迁移 `20261013190000_add_settings_table`）；新增 3.6 GET /api/settings（没存过返回 `settings: null`，不是错误）与 3.7 PUT /api/settings（校验周一/12 节/HH:MM，按口令 upsert）；3.2 GET /api/courses 响应附带 `settings`（首页一次往返同时拿课程与设置）。设置与课程相互独立：没课也能存设置，清课不动设置 |

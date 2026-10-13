@@ -1,15 +1,17 @@
 /* ============================================================
-   ui-settings.js —— 设置页交互（Day 25 · T8）
-   对应：PRD V3.1 / V3.2、F5 / F6、验收 D1 / D2 / D5
+   ui-settings.js —— 设置页交互（Day 25 · T8；Day 26 设置上云）
+   对应：PRD V3.1 / V3.2、F5 / F6、验收 D1 / D2 / D5，
+   设置正本 = 云端 settings 表（api-contract.md 2.6/3.6/3.7，按口令隔离）。
 
    四块功能：
      ① 学期设置：学期第一周周一（必须周一）+ 12 节起止时间，
-        显式「保存设置」才写入 localStorage（settings-store.js）；
-     ② 恢复默认作息：二次确认 → 清键 → 表单回默认；
+        「保存设置」= PUT /api/settings 写云端正本 + 写本地缓存；
+        打开页面时 GET /api/settings 拉云端填表（没存过 = null → 用缓存/默认）；
+     ② 恢复默认作息：二次确认 → PUT 默认值上云 → 表单回默认；
      ③ 备份导出 / 导入：当前口令名下的课程（云端拉取 / POST 恢复）
-        + 本机设置，打包成一个 JSON 文件；导入目标 = 当前口令；
+        + 设置（缓存 / PUT 上云），打包成一个 JSON 文件；导入目标 = 当前口令；
      ④ 清空全部数据：二次确认 → 逐条 DELETE 当前口令的课程
-        → 设置恢复默认（契约没有「清空」接口，逐条删是现实做法）。
+        → 设置恢复默认（上云 + 本地，契约没有「清空」接口，逐条删是现实做法）。
 
    所有网络请求带课表口令（schedule-code.js）；反馈走 ui-modal。
    ============================================================ */
@@ -35,21 +37,20 @@ function setupSettingsPage() {
   const clearBtn = document.getElementById('setting-clear-btn');
   if (!dateInput || !periodBox || !saveBtn) return;
 
-  /** 12 行起止时间输入。用 text + placeholder 而非 type=time：
-      jsdom 与部分安卓浏览器对 time 的支持参差，文本框 + 格式校验更稳。
-      值形如 '08:00'，与 TIME_PATTERN（settings-store.js）同一格式。 */
+  /** 12 行起止时间输入。输入框只读：点按弹出滚筒选择器（Day 25 追加，
+      用户反馈「逐个手动输入太麻烦」）。值仍形如 '08:00'，写回由滚筒保证。 */
   function renderPeriodInputs(settings) {
     periodBox.innerHTML = settings.periodTimes
       .map((p, i) =>
         `<div class="setting-row setting-row--field">` +
         `<span class="setting-row__label">第 ${i + 1} 节</span>` +
-        `<input class="setting-row__input setting-row__input--time" type="text" ` +
-        `inputmode="numeric" placeholder="08:00" maxlength="5" ` +
-        `data-period="${i}" data-edge="start" value="${p.start}" aria-label="第 ${i + 1} 节开始时间">` +
+        `<input class="setting-row__input setting-row__input--time" type="text" readonly ` +
+        `placeholder="08:00" ` +
+        `data-period="${i}" data-edge="start" value="${p.start}" aria-label="第 ${i + 1} 节开始时间，点按弹出滚筒选择">` +
         `<span class="setting-row__dash">–</span>` +
-        `<input class="setting-row__input setting-row__input--time" type="text" ` +
-        `inputmode="numeric" placeholder="08:45" maxlength="5" ` +
-        `data-period="${i}" data-edge="end" value="${p.end}" aria-label="第 ${i + 1} 节结束时间">` +
+        `<input class="setting-row__input setting-row__input--time" type="text" readonly ` +
+        `placeholder="08:45" ` +
+        `data-period="${i}" data-edge="end" value="${p.end}" aria-label="第 ${i + 1} 节结束时间，点按弹出滚筒选择">` +
         `</div>`
       )
       .join('');
@@ -60,7 +61,25 @@ function setupSettingsPage() {
     renderPeriodInputs(settings);
   }
 
+  /* 初始填表：先立刻用本地缓存/默认值画出来（不打白屏），
+     再异步拉云端正本——有则覆盖表单并同步缓存。
+     Day 26 起设置正本在云端：换浏览器打开，云设置也能跟过来。 */
   fillForm(getSettings());
+  (async () => {
+    try {
+      const url = apiUrlWithCode(`${SETTINGS_API_BASE_URL}/api/settings`);
+      if (!url) return;   // 没口令：守卫会在首页/入口页处理，这里不动表单
+      const resp = await fetch(url);
+      if (!resp.ok) return;   // 读不到云端就静默用本地值，不打扰用户
+      const body = await resp.json();
+      if (body && body.ok === true && isValidSettings(body.data && body.data.settings)) {
+        saveSettings(body.data.settings);
+        fillForm(body.data.settings);
+      }
+    } catch (err) {
+      /* 网络失败静默：本地缓存/默认值已经画在页面上了 */
+    }
+  })();
 
   /* ---------- ① 保存 ---------- */
 
@@ -93,18 +112,53 @@ function setupSettingsPage() {
     return { settings: { semesterStart, periodTimes, schemaVersion: 1 } };
   }
 
-  saveBtn.addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     const result = collectForm();
     if (result.error) {
       showStatusModal({ type: 'error', title: '保存失败', desc: result.error });
       return;
     }
-    saveSettings(result.settings);
-    showStatusModal({
-      type: 'success',
-      title: '设置已保存',
-      desc: '回首页后，周数与状态标签即按新设置计算。',
-    });
+    saveBtn.disabled = true;
+    showStatusModal({ type: 'loading', title: '正在保存设置…' });
+
+    try {
+      /* Day 26：正本上云（PUT /api/settings，契约 3.7），成功后写本地缓存。
+         接口体只带契约 2.6 的两个字段（schemaVersion 是本地缓存扩展，不上云）。 */
+      const url = apiUrlWithCode(`${SETTINGS_API_BASE_URL}/api/settings`);
+      if (!url) {
+        window.location.replace('./entry.html');
+        return;
+      }
+      const resp = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          semesterStart: result.settings.semesterStart,
+          periodTimes: result.settings.periodTimes,
+        }),
+      });
+      let body = null;
+      try { body = await resp.json(); } catch (err) { /* 平台层 450 空响应体 */ }
+      if (!resp.ok || !body || body.ok !== true) {
+        const msg = body && body.error && body.error.message;
+        throw { message: msg || '云端保存失败，设置未改动，请稍后再试。' };
+      }
+
+      saveSettings(result.settings);
+      showStatusModal({
+        type: 'success',
+        title: '设置已保存',
+        desc: '已同步到云端（跟口令走）：回首页后，周数与状态标签即按新设置计算。',
+      });
+    } catch (err) {
+      showStatusModal({
+        type: 'error',
+        title: '保存失败',
+        desc: (err && err.message) || '请稍后再试。',
+      });
+    } finally {
+      saveBtn.disabled = false;
+    }
   });
 
   /* ---------- ② 恢复默认作息 ---------- */
@@ -112,12 +166,41 @@ function setupSettingsPage() {
   resetBtn.addEventListener('click', () => {
     showConfirmModal({
       title: '恢复默认作息？',
-      desc: '学期起点与 12 节时间将恢复为默认值，当前自定义的设置会被覆盖。',
+      desc: '学期起点与 12 节时间将恢复为默认值（云端与本机一并覆盖），当前自定义的设置会被覆盖。',
       confirmText: '恢复默认',
-      onConfirm: () => {
-        resetSettings();
-        fillForm(getSettings());
-        showStatusModal({ type: 'success', title: '已恢复默认作息' });
+      onConfirm: async () => {
+        resetBtn.disabled = true;
+        showStatusModal({ type: 'loading', title: '正在恢复默认…' });
+        try {
+          /* 云端正本先写默认值（其他设备同步生效），再清本地缓存 */
+          const url = apiUrlWithCode(`${SETTINGS_API_BASE_URL}/api/settings`);
+          if (!url) {
+            window.location.replace('./entry.html');
+            return;
+          }
+          const resp = await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              semesterStart: DEFAULT_SETTINGS.semesterStart,
+              periodTimes: DEFAULT_SETTINGS.periodTimes,
+            }),
+          });
+          if (!resp.ok) {
+            throw { message: '云端恢复失败，设置未改动，请稍后再试。' };
+          }
+          resetSettings();
+          fillForm(getSettings());
+          showStatusModal({ type: 'success', title: '已恢复默认作息' });
+        } catch (err) {
+          showStatusModal({
+            type: 'error',
+            title: '恢复失败',
+            desc: (err && err.message) || '请稍后再试。',
+          });
+        } finally {
+          resetBtn.disabled = false;
+        }
       },
     });
   });
@@ -262,11 +345,27 @@ function setupSettingsPage() {
         throw { message: msg || '云端恢复失败，本机设置未改动，请稍后再试。' };
       }
 
+      /* Day 26：设置正本也恢复到云端（备份里的 settings 带 schemaVersion 本地
+         扩展，接口体只带契约 2.6 两个字段）；成功后再写本地缓存 */
+      const putUrl = apiUrlWithCode(`${SETTINGS_API_BASE_URL}/api/settings`);
+      if (putUrl) {
+        const putResp = await fetch(putUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            semesterStart: backup.settings.semesterStart,
+            periodTimes: backup.settings.periodTimes,
+          }),
+        });
+        if (!putResp.ok) {
+          throw { message: '课程的云端恢复已完成，但设置上云失败——请稍后在设置页重新保存。' };
+        }
+      }
       saveSettings(backup.settings);
       showStatusModal({
         type: 'success',
         title: `恢复完成（${body.data.imported} 门课）`,
-        desc: '设置已同步覆盖，回首页即可看到。',
+        desc: '课程与设置均已恢复到当前口令（云端），回首页即可看到。',
       });
     } catch (err) {
       showStatusModal({
@@ -375,14 +474,33 @@ function setupSettingsPage() {
         deleted++;
       }
 
+      /* 设置恢复默认：云端正本 PUT 默认值（其他设备同步生效）+ 清本地缓存。
+         云端失败不阻断「已清空」的汇报（课程已删完），只附一句说明。 */
+      let settingsNote = '';
+      try {
+        const putUrl = apiUrlWithCode(`${SETTINGS_API_BASE_URL}/api/settings`);
+        if (putUrl) {
+          const putResp = await fetch(putUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              semesterStart: DEFAULT_SETTINGS.semesterStart,
+              periodTimes: DEFAULT_SETTINGS.periodTimes,
+            }),
+          });
+          if (!putResp.ok) settingsNote = '（设置上云未成功，可稍后在设置页重存一次）';
+        }
+      } catch (err) {
+        settingsNote = '（设置上云未成功，可稍后在设置页重存一次）';
+      }
       resetSettings();
       fillForm(getSettings());
       showStatusModal({
         type: 'success',
         title: '已清空',
-        desc: courses.length === 0
+        desc: (courses.length === 0
           ? '该口令名下本就没有课程，设置已恢复默认。'
-          : `已删除 ${deleted} 门课，设置已恢复默认。`,
+          : `已删除 ${deleted} 门课，设置已恢复默认。`) + settingsNote,
       });
     } catch (err) {
       showStatusModal({
@@ -392,6 +510,102 @@ function setupSettingsPage() {
       });
     }
   }
+
+  /* ---------- 时间滚筒选择器（Day 25 追加，Day 26 修复误选） ----------
+     点任一时间框 → 弹窗：两列滚轮（时 0–23 / 分 0–55 每 5 分钟一档）+ 取消/确认。
+
+     【Day 26 修复】主人真机反馈「滑到某时间、点确认却是另一个时间」。
+     旧版在 scroll 事件里写选中状态，而 scroll-snap 吸附动画的收尾阶段
+     （微信 X5 内核尤其明显）常常不再触发 scroll——状态滞留在滑动途中的
+     中间值，眼见与所得不一致。
+     现在改为：**滚轮的滚动位置（scrollTop）是唯一事实来源**——
+     点数字 / 滑动只负责「把位置挪到位 + 更新高亮」，数值一律在点「确认」
+     那一刻从 scrollTop 反算。任何时序抖动都影响不到取值。 */
+  const ITEM_HEIGHT = 40;          // 与 pages.css 的 .time-picker__item 高度一致
+  const pickerMask = document.getElementById('time-picker');
+  const hourWheel = document.getElementById('tp-wheel-hour');
+  const minuteWheel = document.getElementById('tp-wheel-minute');
+  const pickerCancel = document.getElementById('tp-cancel');
+  const pickerConfirm = document.getElementById('tp-confirm');
+  const pickerState = { input: null };
+
+  const pad2t = (n) => String(n).padStart(2, '0');
+  const HOURS = Array.from({ length: 24 }, (_, i) => i);
+  const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+
+  /** 从滚动位置反算下标（确认时刻的权威取值；越界收口） */
+  function idxFromScroll(wheel, count) {
+    return Math.max(0, Math.min(count - 1, Math.round(wheel.scrollTop / ITEM_HEIGHT)));
+  }
+
+  /** 建一列滚轮。values 是候选值数组，initialIdx 是打开时选中的下标。
+      只管「挪位置 + 高亮」，不存数值。 */
+  function buildWheel(wheel, values, initialIdx) {
+    wheel.innerHTML = values
+      .map((v) => `<div class="time-picker__item" data-value="${v}">${pad2t(v)}</div>`)
+      .join('');
+    const items = Array.from(wheel.children);
+
+    const setSelected = (idx) => {
+      items.forEach((el, i) => el.classList.toggle('is-selected', i === idx));
+    };
+
+    /* 路①：直接点数字——瞬时吸附到正中。
+       不用平滑滚动（smooth）：既拖慢手感，又会留下「滚动还在途中」的窗口期。 */
+    items.forEach((el, idx) => {
+      el.addEventListener('click', () => {
+        setSelected(idx);
+        wheel.scrollTop = idx * ITEM_HEIGHT;
+      });
+    });
+
+    /* 路②：手指滑动——只更新高亮跟随；数值交给确认时的反算 */
+    wheel.addEventListener('scroll', () => {
+      setSelected(idxFromScroll(wheel, values.length));
+    }, { passive: true });
+
+    setSelected(initialIdx);
+  }
+
+  function openTimePicker(input) {
+    pickerState.input = input;
+    const parts = input.value.split(':').map(Number);
+    const h = parts[0] || 0;
+    /* 分钟对齐到 5 的倍数（备份里的老数据万一不是 5 的倍数，就近取） */
+    const m = Math.round((parts[1] || 0) / 5) * 5 % 60;
+
+    buildWheel(hourWheel, HOURS, h);
+    buildWheel(minuteWheel, MINUTES, m / 5);
+    /* 打开时把当前值定位到正中（瞬时，不给误选留窗口） */
+    hourWheel.scrollTop = h * ITEM_HEIGHT;
+    minuteWheel.scrollTop = (m / 5) * ITEM_HEIGHT;
+
+    pickerMask.classList.remove('is-hidden');
+  }
+
+  function closeTimePicker() {
+    pickerMask.classList.add('is-hidden');
+    pickerState.input = null;
+  }
+
+  /* 点时间框（事件委托：12 行 24 个框，一个监听管全部） */
+  periodBox.addEventListener('click', (event) => {
+    const input = event.target.closest('input[data-period]');
+    if (input) openTimePicker(input);
+  });
+
+  pickerCancel.addEventListener('click', closeTimePicker);
+
+  pickerConfirm.addEventListener('click', () => {
+    if (!pickerState.input) { closeTimePicker(); return; }
+    /* 确认那一刻从滚动位置反算——此刻滚轮停在哪格就取哪格，眼见即所得。
+       （即使用户在吸附动画尚未完全停稳时按下确认，round 取的也是
+       「离当前位置最近的格」，正是吸附将要停靠的那格。） */
+    const h = HOURS[idxFromScroll(hourWheel, HOURS.length)];
+    const m = MINUTES[idxFromScroll(minuteWheel, MINUTES.length)];
+    pickerState.input.value = `${pad2t(h)}:${pad2t(m)}`;
+    closeTimePicker();
+  });
 }
 
 /* 本脚本在 body 底部加载，执行到这里时 DOM 已就绪，直接初始化 */

@@ -801,7 +801,16 @@ async function readLocalData() {
   }
 
   lastFetchTime = new Date();   // 抓取完成时刻，renderPage() 里显示
-  return { courses: body.data.courses, settings: getSettings() };
+
+  /* 设置（Day 26 上云，契约 3.2）：正本在云端，随本次响应带回。
+     云端有且形状合法 → 写入本地缓存并使用（换浏览器后首次打开即拿到云设置）；
+     云端 null（从未保存过）或形状不对 → 用本地缓存/默认值兜底。 */
+  let settings = getSettings();
+  if (isValidSettings(body.data.settings)) {
+    settings = body.data.settings;
+    saveSettings(settings);
+  }
+  return { courses: body.data.courses, settings };
 }
 
 /** 读取成功后，把首页三块内容都画出来 */

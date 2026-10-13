@@ -14,6 +14,7 @@
 -- ============================================================
 
 -- 建表前先删旧表：先删子表，避免外键引用挡路；CASCADE 连带清掉依赖对象
+DROP TABLE IF EXISTS settings CASCADE;
 DROP TABLE IF EXISTS course_weeks CASCADE;
 DROP TABLE IF EXISTS courses CASCADE;
 
@@ -47,6 +48,18 @@ CREATE TABLE course_weeks (
   CONSTRAINT fk_course_weeks_course
     FOREIGN KEY (course_id) REFERENCES courses (id)
     ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 设置表：每口令一份「学期起点 + 节次时间表」（契约 2.6，Day 26）
+-- 设置独立于课程存在：没课也能存设置，清课不动设置
+-- ------------------------------------------------------------
+CREATE TABLE settings (
+  code           VARCHAR(12) PRIMARY KEY,
+  semester_start VARCHAR(32) NOT NULL,
+  period_times   JSONB       NOT NULL,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT chk_settings_code CHECK (code ~ '^[A-HJ-NP-Z2-9]{6}$')
 );
 
 -- ============================================================

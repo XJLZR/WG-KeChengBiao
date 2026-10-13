@@ -13,6 +13,9 @@
 // Day 25 课表口令（契约 2.5，拍板方案 B）：全部课程接口必填 ?code=，
 //   读写范围收窄到该口令名下；导入写入时服务端为每条 id 加口令前缀
 //   （同班同学导入同一份文件会产生相同原始 id，无前缀会在全局主键上相撞）
+// Day 26 设置上云（契约 2.6 / 3.6 / 3.7）：GET /api/settings（没存过=null，不是错误）
+//   + PUT /api/settings（校验周一/12 节/HH:MM 后按口令 upsert）；
+//   GET /api/courses 响应附带 settings——首页一次往返同时拿课程与设置
 // ============================================================
 const http = require('http');
 const { hasApiKey } = require('./repositories/rdbClient');
@@ -27,6 +30,7 @@ const {
   insertCourses,
 } = require('./repositories/coursesRepository');
 const { insertWeeks, deleteWeeksByCourseId } = require('./repositories/courseWeeksRepository');
+const { fetchSettingsByCode, upsertSettings } = require('./repositories/settingsRepository');
 
 // 监听端口必须与控制台「函数配置 → 监听端口」一致（Day 15 实测：不一致网关 65 秒超时返回 450）
 const PORT = 9000;
@@ -140,7 +144,11 @@ async function handleCourses(res, searchParams) {
     return;
   }
 
-  ok(res, { courses, count: courses.length });
+  /* Day 26（契约 3.2）：响应附带该口令的设置——首页一次往返同时拿到
+     课程与设置。没存过设置 = null，前端用默认值兜底（契约 3.6 同口径）。
+     两个查询相互独立，并行发。 */
+  const settings = await fetchSettingsByCode(code);
+  ok(res, { courses, count: courses.length, settings });
 }
 
 // ============================================================
@@ -525,6 +533,118 @@ async function handleDelete(res, id, searchParams) {
 
 // ---------- HTTP 路由 ----------
 
+// ============================================================
+// Day 26：GET / PUT /api/settings —— 设置上云（契约 3.6 / 3.7）
+// 设置独立于课程：口令名下没课也能存设置；清课不动设置。
+// ============================================================
+
+// HH:MM（24 小时制）格式；HH:MM 的字符串比较即时间先后（两位补齐时成立）
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+const PERIOD_COUNT = 12;
+
+/**
+ * 校验并规范化设置请求体（契约 3.7）。
+ * 合法返回 { value: { semesterStart, periodTimes } }；不合法返回 { error: 中文说明 }。
+ * 服务端校验是最后防线——前端 settings-store.js 的 isValidSettings 同一套规则。
+ */
+function validateSettingsBody(body) {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return { error: '请求体必须是对象（含 semesterStart 和 periodTimes）' };
+  }
+
+  // semesterStart：合法日期 + 必须周一（不是周一则全学期周数错位）。
+  // 用 UTC 方法判断星期：'YYYY-MM-DD' 在 JS 里按 UTC 零点解析，本地时区可能倒退一天
+  const d = typeof body.semesterStart === 'string' ? new Date(`${body.semesterStart}T00:00:00Z`) : null;
+  if (!d || Number.isNaN(d.getTime()) || body.semesterStart !== d.toISOString().slice(0, 10)) {
+    return { error: 'semesterStart 必须是 YYYY-MM-DD 格式的合法日期，如 2026-08-31' };
+  }
+  if (d.getUTCDay() !== 1) {
+    return { error: 'semesterStart 必须是周一：学期第一周的周一错了，全学期的周数都会错位' };
+  }
+
+  // periodTimes：恰好 12 节，每节 start/end 合法且 start < end
+  const p = body.periodTimes;
+  if (!Array.isArray(p) || p.length !== PERIOD_COUNT) {
+    return { error: `periodTimes 必须是 ${PERIOD_COUNT} 项的数组（第 1–12 节各一项）` };
+  }
+  for (let i = 0; i < p.length; i++) {
+    const item = p[i];
+    const nth = `第 ${i + 1} 节`;
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      return { error: `${nth}必须是含 start/end 的对象` };
+    }
+    if (typeof item.start !== 'string' || !TIME_PATTERN.test(item.start)) {
+      return { error: `${nth}的 start 必须是 HH:MM 格式（24 小时制），如 08:00` };
+    }
+    if (typeof item.end !== 'string' || !TIME_PATTERN.test(item.end)) {
+      return { error: `${nth}的 end 必须是 HH:MM 格式（24 小时制），如 08:45` };
+    }
+    if (item.start >= item.end) {
+      return { error: `${nth}的结束时间（${item.end}）必须晚于开始时间（${item.start}）` };
+    }
+  }
+
+  return { value: { semesterStart: body.semesterStart, periodTimes: p } };
+}
+
+/** GET /api/settings（契约 3.6）：没存过返回 settings: null，仍是 200——「还没设置过」不是错误 */
+async function handleSettingsGet(res, searchParams) {
+  const parsed = parseCode(searchParams);
+  if (parsed.error) {
+    failCode(res, parsed);
+    return;
+  }
+  if (!hasApiKey()) {
+    fail(res, 500, 'SERVER_ERROR', '服务端未配置数据库凭据（RDB_API_KEY）');
+    return;
+  }
+
+  const settings = await fetchSettingsByCode(parsed.code);
+  ok(res, { settings });
+}
+
+/** PUT /api/settings（契约 3.7）：校验 → 按口令 upsert */
+async function handleSettingsPut(req, res, searchParams) {
+  const parsed = parseCode(searchParams);
+  if (parsed.error) {
+    failCode(res, parsed);
+    return;
+  }
+  if (!hasApiKey()) {
+    fail(res, 500, 'SERVER_ERROR', '服务端未配置数据库凭据（RDB_API_KEY）');
+    return;
+  }
+
+  let value;
+  try {
+    const raw = await readBody(req);
+    const body = JSON.parse(raw);
+    const result = validateSettingsBody(body);
+    if (result.error) {
+      fail(res, 400, 'BAD_REQUEST', result.error);
+      return;
+    }
+    value = result.value;
+  } catch (err) {
+    if (err.code === 'BAD_REQUEST') {
+      fail(res, 400, 'BAD_REQUEST', err.message);   // readBody 超限
+      return;
+    }
+    fail(res, 400, 'BAD_REQUEST', '请求体不是合法的 JSON');
+    return;
+  }
+
+  try {
+    await upsertSettings(parsed.code, value.semesterStart, value.periodTimes);
+  } catch (err) {
+    console.error(`[settings PUT ${parsed.code}] 网关错误: ${err.message}`);
+    fail(res, 500, 'SERVER_ERROR', '设置保存失败，请稍后重试');
+    return;
+  }
+
+  ok(res, { saved: true });
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   // 去掉尾部斜杠，/api/courses/ 与 /api/courses 等价
@@ -547,9 +667,32 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Day 26：/api/settings —— 设置读/存（契约 3.6 / 3.7）
+  if (path === '/api/settings') {
+    if (req.method === 'GET') {
+      handleSettingsGet(res, url.searchParams).catch((err) => {
+        console.error('[settings GET] upstream error:', err.message);
+        fail(res, 500, 'SERVER_ERROR', '设置读取失败，请稍后重试');
+      });
+      return;
+    }
+    if (req.method === 'PUT') {
+      handleSettingsPut(req, res, url.searchParams).catch((err) => {
+        if (err.code === 'BAD_REQUEST' && err.statusCode === 400) {
+          fail(res, 400, 'BAD_REQUEST', err.message);
+          return;
+        }
+        console.error('[settings PUT] unexpected error:', err.message);
+        fail(res, 500, 'SERVER_ERROR', '服务端异常，请稍后重试');
+      });
+      return;
+    }
+    fail(res, 405, 'METHOD_NOT_ALLOWED', '本接口只接受 GET 和 PUT 请求');
+    return;
+  }
+
   // Day 18：导入课表（契约 3.3）
-  if (path === '/api/courses/import') {
-    if (req.method !== 'POST') {
+  if (path === '/api/courses/import') {    if (req.method !== 'POST') {
       fail(res, 405, 'METHOD_NOT_ALLOWED', '本接口只接受 POST 请求');
       return;
     }

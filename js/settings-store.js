@@ -1,17 +1,23 @@
 /* ============================================================
-   settings-store.js —— 设置数据存取共享模块（Day 25 · T8）
-   对应：PRD 5.2 / F6，拍板（Day 25 方案 B）：设置存浏览器本地，
-   不上云、不建数据库表——换设备需重设，属已接受的代价。
+   settings-store.js —— 设置数据存取共享模块（Day 25 · T8；Day 26 改上云）
+   对应：PRD F6、api-contract.md 2.6 / 3.6 / 3.7。
 
-   数据形状（PRD 5.2 / TECH_DESIGN 3.2）：
+   【Day 26 变更】设置的正本从浏览器 localStorage 改到云端 settings 表
+   （按课表口令隔离）。推翻原拍板的原因：微信内置浏览器与系统浏览器是
+   两个独立浏览器，localStorage 互不相通——设置存本机导致「微信里调好、
+   换浏览器又要重调」。本文件的 localStorage 从「正本」降级为「缓存」：
+   - 云端有设置 → 读写走云（ui-settings.js 的 PUT / GET），同时 saveSettings 写缓存；
+   - 云端没存过（settings: null）→ 用缓存/默认值兜底，绝不报错。
+   校验规则（isValidSettings）与云函数 validateSettingsBody 是同一套。
+
+   数据形状（api-contract.md 2.6 + schemaVersion 本地扩展）：
      {
        semesterStart: 'YYYY-MM-DD',   // 学期第一周周一（周数计算基准）
        periodTimes: [ { start:'HH:MM', end:'HH:MM' } × 12 ],
-       schemaVersion: 1,
+       schemaVersion: 1,              // 仅本地缓存/备份带，接口体不带
      }
 
-   读取策略（TECH_DESIGN 6.3 的降级口径）：
-     没存过 / 存的坏了 / 字段不全 → 一律返回默认值，**不抛错**。
+   读取策略：没缓存 / 缓存坏了 / 字段不全 → 一律返回默认值，**不抛错**。
      理由：设置坏了只影响「第几周 / 状态标签」算得准不准，
      不该把整个首页打入 V1.8 读取失败——那套是给课表数据用的。
    ============================================================ */
@@ -85,12 +91,12 @@ function getSettings() {
   return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
 }
 
-/** 保存设置。调用方应先用 isValidSettings 校验（本函数不做第二道校验，保持薄） */
+/** 写本地缓存。正本在云端（Day 26）；调用方应在云端保存成功后再调它 */
 function saveSettings(settings) {
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
 }
 
-/** 清除设置（「恢复默认」「清空全部数据」用），下次读即得默认值 */
+/** 清除本地缓存（「恢复默认」「清空全部数据」用），下次读即得默认值 */
 function resetSettings() {
   localStorage.removeItem(SETTINGS_STORAGE_KEY);
 }
