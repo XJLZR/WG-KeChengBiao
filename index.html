@@ -138,8 +138,20 @@
          周视图（PRD V1.6）：周一至周日 × 第 1–12 节
          网格与格子里的课程都由 js/ui-home.js 生成 ——
          每个格子要标明「第几行第几列」，12 × 8 手写进 HTML 不现实
+         Day 25 加换周：切换器只管周视图；「今日」视图不动（只显示今天）。
+         拍板 A：非本周一律不给「今天」高亮——拿今天去套别的周是误导。
          ============================================================ -->
     <div class="view is-hidden" id="view-week">
+      <div class="week-switch">
+        <button class="btn btn--ghost week-switch__btn" type="button" id="week-prev"
+                aria-label="查看上一周">‹ 上一周</button>
+        <span class="week-switch__label" id="week-label">本周</span>
+        <button class="btn btn--ghost week-switch__btn" type="button" id="week-next"
+                aria-label="查看下一周">下一周 ›</button>
+      </div>
+      <button class="btn btn--ghost week-switch__back is-hidden" type="button" id="week-back">
+        回到本周
+      </button>
       <div class="week-scroll">
         <div class="week-grid" id="week-grid"></div>
       </div>

@@ -596,6 +596,45 @@
   line-height: 1.8;
 }
 
+/* ---------- 周视图换周（Day 25，拍板：非本周不显示「今天」高亮） ---------- */
+
+/* 切换器一行：上一周 · 第 N 周 · 下一周 */
+.week-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* 中间的周次标签：两端按钮往两边顶 */
+.week-switch__label {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+/* 两个翻页按钮：复用 ghost 四态，只收左右内边距防挤爆窄屏 */
+.week-switch__btn {
+  min-height: 40px;              /* 触摸目标 ≥40px */
+  padding: 0 var(--space-2);
+  white-space: nowrap;
+}
+
+/* 到学期边界后不可再翻：压淡而不是藏，位置不跳 */
+.week-switch__btn:disabled {
+  opacity: 0.4;
+}
+
+/* 「回到本周」快捷键：只在看别的周时出现（见 ui-home.js） */
+.week-switch__back {
+  display: block;
+  min-height: 40px;
+  margin: 0 auto var(--space-2);
+  padding: 0 var(--space-3);
+}
+
 /* ============================================================
    入口页 entry.html（Day 25 课表口令，契约 2.5）
    ============================================================ */

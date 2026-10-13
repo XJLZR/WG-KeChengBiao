@@ -410,6 +410,13 @@ function renderWeekGrid(courses, week, todayWeekday) {
 /** 当前选中的视图：'today'（今日，PRD V1.1–V1.5）| 'week'（周视图，PRD V1.6） */
 let activeView = 'today';
 
+/* ---------- 周视图换周（Day 25，拍板：非本周不显示状态类信息） ----------
+   viewingWeek: null = 看本周（跟随今天）；数字 = 正在看第 N 周。
+   只影响周视图的渲染，「今日」视图始终只显示今天（主人原话）。
+   拍板 A 的落点：非本周时 renderWeekGrid 拿到 todayWeekday = null，
+   「今天」列高亮（is-today）自然不出现——拿今天去套别的周是误导。 */
+let viewingWeek = null;
+
 /**
  * 把「正常态下该显示哪几块」一次算清楚。
  *
@@ -826,7 +833,7 @@ function renderPage(courses, settings) {
 
   renderWeekbar(week, now);
   renderTodayView(courses, settings, now);
-  renderWeekGrid(courses, week, getWeekday(now));
+  renderWeekView();
 
   /* Day 20：显示本次数据的抓取时间（接口成功返回的时刻）。
      放在 renderPage 里而非 readLocalData 里，刷新流程也能自动更新它。 */
@@ -837,6 +844,77 @@ function renderPage(courses, settings) {
 
   /* 正在搜索时，新数据也要重新过一遍筛选（刷新后结果跟着更新，不留在旧结果上） */
   if (searchKeyword !== '') renderSearchPanel();
+}
+
+/* ---------- 周视图换周（Day 25） ---------- */
+
+/**
+ * 渲染周视图（含换周状态）。
+ * 与 renderPage 分开成独立函数：点「上一周 / 下一周 / 回到本周」时
+ * 只重画周视图，不重算今日视图与顶部信息条（它们和 viewingWeek 无关）。
+ */
+function renderWeekView() {
+  if (!currentCourses || !currentSettings) return;
+
+  const now = new Date();
+  const currentWeek = getWeekNumber(currentSettings, now);
+  const lastWeek = getTermLastWeek(currentCourses);
+
+  /* 目标周 = 正在看的周；没在换周状态就看本周。
+     收口到 1..lastWeek：翻过头或数据变短后不至于画出空壳。 */
+  let target = viewingWeek === null ? currentWeek : viewingWeek;
+  if (target === null || target < 1) target = 1;
+  if (target > lastWeek) target = lastWeek;
+  viewingWeek = target === currentWeek ? null : target;
+
+  /* 拍板 A：非本周不给「今天」高亮 → todayWeekday 传 null，
+     renderWeekGrid 里的 is-today 判断自然全部落空 */
+  renderWeekGrid(currentCourses, target, viewingWeek === null ? getWeekday(now) : null);
+  updateWeekSwitcher(target, currentWeek, lastWeek);
+}
+
+/** 同步切换器的三个控件：周次文案、两端翻页的可用性、「回到本周」显隐 */
+function updateWeekSwitcher(target, currentWeek, lastWeek) {
+  const label = document.getElementById('week-label');
+  const prevBtn = document.getElementById('week-prev');
+  const nextBtn = document.getElementById('week-next');
+  const backBtn = document.getElementById('week-back');
+  if (!label || !prevBtn || !nextBtn || !backBtn) return;
+
+  label.textContent = `第 ${target} 周` + (target === currentWeek ? ' · 本周' : '');
+  prevBtn.disabled = target <= 1;
+  nextBtn.disabled = target >= lastWeek;
+  backBtn.classList.toggle('is-hidden', target === currentWeek);
+}
+
+/** 接上切换器。翻页基准 = 当前看的周（没在换周状态就从本周起翻） */
+function initWeekSwitch() {
+  const prevBtn = document.getElementById('week-prev');
+  const nextBtn = document.getElementById('week-next');
+  const backBtn = document.getElementById('week-back');
+  if (!prevBtn || !nextBtn || !backBtn) return;
+
+  const baseWeek = () => {
+    if (viewingWeek !== null) return viewingWeek;
+    const current = currentSettings ? getWeekNumber(currentSettings, new Date()) : null;
+    return current || 1;
+  };
+
+  prevBtn.addEventListener('click', () => {
+    viewingWeek = Math.max(1, baseWeek() - 1);
+    renderWeekView();
+  });
+
+  nextBtn.addEventListener('click', () => {
+    /* 上限交给 renderWeekView 按学期末收口，这里只管 +1 */
+    viewingWeek = baseWeek() + 1;
+    renderWeekView();
+  });
+
+  backBtn.addEventListener('click', () => {
+    viewingWeek = null;
+    renderWeekView();
+  });
 }
 
 /**
@@ -940,6 +1018,7 @@ function initRefreshButton() {
 
 /* 页面加载时：先接好「不需要数据」的线，再走一次读取流程 */
 initViewSwitch();
+initWeekSwitch();
 initCourseFilter();
 initRetryButton();
 initRefreshButton();
