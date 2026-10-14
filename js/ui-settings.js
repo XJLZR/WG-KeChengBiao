@@ -24,6 +24,14 @@ const SETTINGS_API_BASE_URL =
 const BACKUP_TYPE = 'wg-timetable-backup';
 
 function setupSettingsPage() {
+  /* ---------- Day 27：网址 ?code= 优先存下 ----------
+     真实试用反馈的场景：用户在微信里被引导「用浏览器打开」，浏览器
+     打开的是带 ?code= 的网址，但这个浏览器环境的 localStorage 是空的。
+     此前设置页不认网址口令，点任何按钮都会被弹去入口页逼用户重输。
+     现在与首页 bootstrap 同一口径：网址口令优先，合法就存。 */
+  const urlCode = scheduleCodeFromUrl();
+  if (urlCode) setScheduleCode(urlCode);
+
   /* ---------- 表单：加载当前设置 ---------- */
 
   const dateInput = document.getElementById('setting-semester-start');
@@ -379,6 +387,32 @@ function setupSettingsPage() {
   /* ---------- 导出课表日历（.ics，Day 25 · T10） ---------- */
 
   icsBtn.addEventListener('click', async () => {
+    /* ---------- Day 27 修复（真实试用反馈）：微信场景导出断链 ----------
+       微信内置浏览器不支持 Blob + a.download 下载，.ics 永远下不下来；
+       用户此前只能自己想办法跳浏览器，而跳过去的网址不带口令
+       （口令在 localStorage，跨不过微信→浏览器的环境边界），只好重输，
+       还容易误点「生成新口令」造成混乱。
+       现在两件事：
+       ① 用 replaceState 把当前网址补上 ?code=（不刷新页面）——
+          微信右上角「···」→「在浏览器打开」重开的就是这个网址，
+          口令随网址过去，配合上面的网址口令识别，无需重输；
+       ② 微信里不再触发注定失败的下载，直接给明确引导。 */
+    if (/MicroMessenger/i.test(navigator.userAgent)) {
+      const wechatCode = getScheduleCode();
+      if (wechatCode) {
+        const shareUrl = new URL(window.location.href);
+        shareUrl.searchParams.set('code', wechatCode);
+        window.history.replaceState(null, '', shareUrl);
+      }
+      showStatusModal({
+        type: 'success',
+        title: '请在浏览器中打开',
+        desc: '微信里下载不了日历文件。点右上角「···」→「在浏览器打开」，' +
+          '打开后回到设置页再点一次「导出日历」即可，不需要重新输入口令。',
+      });
+      return;
+    }
+
     icsBtn.disabled = true;
     showStatusModal({ type: 'loading', title: '正在生成课表日历…' });
 
