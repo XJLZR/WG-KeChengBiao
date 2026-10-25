@@ -21,7 +21,7 @@
            地点不同不合并（避免把「同一门课换教室」错并掉）。
      冲突：同时间段两门不同课程都保留，不做裁决（本文件不涉及）。
 
-   Day 30「A 方案：别名 + 值容错」：
+   Day 29「A 方案：别名 + 值容错」：
      表头不再要求字面量完全一致，改为字段别名表 + 三级匹配
      （课程名/课程名称/教学班/科目…、周次/上课周次/起止周…）；
      单元格取值也放宽（1 / 一 / 星期一、1-16周 / 1-8,10-16 / 单双周、
@@ -64,7 +64,7 @@ function splitPeriods(periodStr) {
 }
 
 /* ============================================================
-   Day 30：宽容取值函数（列表式 A 方案的「值容错」部分）
+   Day 29：宽容取值函数（列表式 A 方案的「值容错」部分）
    ------------------------------------------------------------
    为什么需要：各校教务导出的「同一个字段」写法差别很大——
      星期：1 / 一 / 星期一 / 周一 / Mon
@@ -250,7 +250,7 @@ function normalizeCellText(el) {
 }
 
 /**
- * 字段别名表（Day 30 提到文件级，供 ui-import.js 的手动映射预填下拉框复用）。
+ * 字段别名表（Day 29 提到文件级，供 ui-import.js 的手动映射预填下拉框复用）。
  * 顺序即优先级：越靠前的别名越具体，匹配时先试。
  */
 const PARSER_HEADER_FIELDS = [
@@ -310,7 +310,7 @@ function parseCourseTable(htmlText) {
   const rows = [...doc.querySelectorAll('tr')];
 
   /* ---- 分类二：找不到表头（V2.3 ①） ----
-     Day 30 起按「字段别名表」定位列：不同学校的表头文字不一样
+     Day 29 起按「字段别名表」定位列：不同学校的表头文字不一样
      （课程名 / 课程名称 / 上课周次 / 节次 / 上课节次 / 教室…），
      写死一套字面量换个学校就全盘失败。
      每个字段给一组候选词，按「完全相等 → 开头相同 → 包含」三级匹配，
@@ -392,7 +392,7 @@ function parseCourseTable(htmlText) {
       continue;
     }
 
-    /* Day 30：取值改为宽容解析——「星期一 / 周一 / 1」「1-16周 / 1-8,10-16」
+    /* Day 29：取值改为宽容解析——「星期一 / 周一 / 1」「1-16周 / 1-8,10-16」
        「第1-2节 / [01-02]节 / 0102」都认。认不出的行仍然只跳过本行。 */
     const weekday = parseWeekdayValue(weekdayStr);
     if (weekday === null) {
@@ -422,7 +422,7 @@ function parseCourseTable(htmlText) {
     const mergeKey = `${name}|${weekday}|${periods.join(',')}|${location}`;
     if (merged.has(mergeKey)) {
       const draft = merged.get(mergeKey);
-      /* Day 30：一行的周次可能本身就是多周（1-16周），逐周并进去 */
+      /* Day 29：一行的周次可能本身就是多周（1-16周），逐周并进去 */
       for (const w of weeks) {
         if (!draft.weeks.includes(w)) {
           draft.weeks.push(w);

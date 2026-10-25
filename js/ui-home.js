@@ -381,7 +381,7 @@ function renderWeekGrid(courses, week, todayWeekday) {
   });
 
   // 左起第一列：第 1–12 节
-  // Day 30：窄列布局下只显示数字（「第12节」四个字在 30 多像素的列里放不下，
+  // Day 29：窄列布局下只显示数字（「第12节」四个字在 30 多像素的列里放不下，
   // 会被挤成两行）。完整说法放进 aria-label，读屏软件仍读「第 12 节」。
   for (let period = 1; period <= PERIOD_COUNT; period++) {
     html += `<div class="week-grid__period" style="grid-row:${period + 1};grid-column:1"` +
