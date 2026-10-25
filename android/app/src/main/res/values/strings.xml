@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WG课程表</string>
+    <string name="title_activity_main">WG课程表</string>
+    <string name="package_name">com.xjlzr.kechengbiao</string>
+    <string name="custom_url_scheme">com.xjlzr.kechengbiao</string>
+</resources>

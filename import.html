@@ -41,7 +41,7 @@
         </li>
         <li class="steps__item">
           <span class="steps__num">2</span>
-          <span>把展示方式切换为「列表展示」</span>
+          <span>找到「学生个人课表」，列表展示或表格展示都可以</span>
         </li>
         <li class="steps__item">
           <span class="steps__num">3</span>
@@ -80,6 +80,42 @@
     </section>
 
     <!-- ============================================================
+         V2.5 手动指定列（Day 30 · 方案 D，自动识别失败时的兜底）
+         为什么要有它：各校课表的表头文字千奇百怪，别名表不可能穷举完。
+         与其让用户卡在「导入失败」，不如把表格前几行摆出来，
+         让他自己指认「哪一列是课程名、哪一列是周次」——
+         人看一眼就知道的事，不该让程序去猜。
+         ============================================================ -->
+    <section class="card" id="import-manual" hidden>
+      <p class="section-title">手动指定列</p>
+      <p class="page-note" id="import-manual-tip">
+        自动识别没成功。下面是文件里的前几行，请告诉我每一列是什么。
+      </p>
+
+      <div class="manual-head">
+        <label class="manual-head__label" for="manual-header-row">表头在第</label>
+        <select class="manual-head__select" id="manual-header-row"></select>
+        <span class="manual-head__label">行</span>
+      </div>
+
+      <div class="manual-table-wrap">
+        <table class="manual-table" id="manual-table"></table>
+      </div>
+
+      <div class="manual-fields" id="manual-fields">
+        <!-- 下拉框由 js/ui-import.js 动态生成：6 个字段 × 列选项 -->
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn--primary" type="button" id="manual-parse-btn">按这个对应关系解析</button>
+        <button class="btn btn--ghost" type="button" id="manual-cancel-btn">取消</button>
+      </div>
+      <p class="page-note">
+        带 * 的四项必须指定，其余可以留空。地点留空时课程卡片会显示「—」。
+      </p>
+    </section>
+
+    <!-- ============================================================
          后续阶段要实现的视图，本阶段留占位注释
          - V2.4 课程管理（新增 / 修改 / 删除）→ T4
          ============================================================ -->
@@ -89,7 +125,11 @@
   <!-- Day 25：口令模块最先加载（ui-import.js 的读写都要带上口令），顺序不能反 -->
   <script src="./js/schedule-code.js"></script>
   <script src="./js/ui-modal.js"></script>
+  <!-- Day 29：SheetJS 读二进制 .xls/.xlsx（网格式课表常见），必须早于 grid-parser 与 ui-import -->
+  <script src="./js/vendor/xlsx.full.min.js"></script>
   <script src="./js/parser.js"></script>
+  <!-- Day 29：网格式解析器（行=节次、列=星期），与列表式 parser.js 并行存在 -->
+  <script src="./js/grid-parser.js"></script>
   <script src="./js/ui-import.js"></script>
 </body>
 

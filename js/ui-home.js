@@ -325,14 +325,38 @@ function renderNextCard(nextCourse, settings) {
  * 坐标写在 style 里而不是靠 CSS 自动排列：CSS 做不到跨行，
  * 而连堂课必须跨行（PRD 验收 C3）。格子本来就是脚本生成的，写坐标不费事。
  */
+/* 窄列（约 44px、12px 字号）上一行大约放 3 个汉字。
+   用来决定课名要缩略到几个字，以及跟 CSS 的 --name-lines 对齐。 */
+const WEEK_COURSE_CHARS_PER_LINE = 3;
+
+/**
+ * 超长课名缩略：保留前 N-1 个字再加省略号。
+ * 为什么要脚本缩略而不是只靠 CSS 的 line-clamp：
+ * line-clamp 是在行末硬裁，屏幕上看到的是「…理论体」这种被切断的半截字，
+ * 读者分不清是截断还是真名；显式加「…」一眼就知道后面还有。
+ * 完整课名放进 title 属性，长按/悬停可以看到。
+ */
+function shortenCourseName(name, maxChars) {
+  if (name.length <= maxChars) return name;
+  return name.slice(0, maxChars - 1) + '…';
+}
+
 function renderWeekCourseBlock(course) {
   const startPeriod = Math.min(...course.periods);
   const span = Math.max(...course.periods) - startPeriod + 1;
 
+  /* 行高 40px 下能放几行课名：跨 1 节 2 行（地点放不下，直接不显示），
+     跨 2 节 3 行 + 地点 2 行，跨 3 节以上 6 行 + 地点 2 行。
+     这组数字是按「块高 = 节数×40 - 4px 内边距」反算的，改行高时一起改。 */
+  const nameLines = span === 1 ? 2 : (span === 2 ? 3 : 6);
+  const displayName = shortenCourseName(course.name, nameLines * WEEK_COURSE_CHARS_PER_LINE);
+  const sizeClass = span === 1 ? ' is-compact' : ' is-tall';
+
   return (
-    `<div class="week-grid__course ${getCourseColorClass(course.name)}"` +
-    ` style="grid-row:${startPeriod + 1} / span ${span};grid-column:${course.weekday + 1}">` +
-    `<span class="week-grid__course-name">${escapeHtml(course.name)}</span>` +
+    `<div class="week-grid__course ${getCourseColorClass(course.name)}${sizeClass}"` +
+    ` style="grid-row:${startPeriod + 1} / span ${span};grid-column:${course.weekday + 1};` +
+    `--name-lines:${nameLines}" title="${escapeHtml(course.name)}">` +
+    `<span class="week-grid__course-name">${escapeHtml(displayName)}</span>` +
     `<span class="week-grid__course-loc">${escapeHtml(course.location || '—')}</span>` +
     `</div>`
   );
@@ -357,8 +381,11 @@ function renderWeekGrid(courses, week, todayWeekday) {
   });
 
   // 左起第一列：第 1–12 节
+  // Day 30：窄列布局下只显示数字（「第12节」四个字在 30 多像素的列里放不下，
+  // 会被挤成两行）。完整说法放进 aria-label，读屏软件仍读「第 12 节」。
   for (let period = 1; period <= PERIOD_COUNT; period++) {
-    html += `<div class="week-grid__period" style="grid-row:${period + 1};grid-column:1">第${period}节</div>`;
+    html += `<div class="week-grid__period" style="grid-row:${period + 1};grid-column:1"` +
+      ` aria-label="第${period}节">${period}</div>`;
   }
 
   // 本周要画的课：周次集合里包含本周（PRD 验收 C2）

@@ -40,7 +40,11 @@ target/
 dist/
 build/
 .gradle/
-vendor/
+# 只忽略仓库根目录的 vendor/（PHP/Composer 习惯）。
+# Day 30：原来写的是 `vendor/`，会连 `js/vendor/` 一起忽略——
+# 而 js/vendor/xlsx.full.min.js 是第三方解析库，必须进仓库，
+# 否则别人 clone 下来导入功能直接失效。
+/vendor/
 bower_components/
 packages/
 
@@ -68,3 +72,25 @@ Desktop.ini
 
 # 课表样本文件（真实教务数据，不进仓库）
 samples/
+
+# ============ 安卓打包相关（Capacitor）============
+
+# 本机 SDK 路径，只对这台电脑有效
+android/local.properties
+
+# 签名文件（含私钥，泄露等于别人能冒充你发版）
+*.jks
+*.keystore
+android/keystore.properties
+
+# 打包源（由 tools/build-www.js 从根目录生成，属于产物）
+www/
+
+# Gradle / 构建产物（.gitignore 上方已有 build/ 与 .gradle/，这里补 Capacitor 特有路径）
+android/.gradle/
+android/app/build/
+android/build/
+
+# 打包出来的安装包（体积大，通过网盘分发，不进仓库）
+*.apk
+*.aab

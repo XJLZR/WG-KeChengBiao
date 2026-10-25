@@ -1,0 +1,8 @@
+{
+  "appId": "com.xjlzr.kechengbiao",
+  "appName": "WG课程表",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "wg-kechengbiao",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WG课程表 —— 安卓 APK 打包工程（Capacitor 壳 + 原生前端）",
+  "scripts": {
+    "build:www": "node tools/build-www.js",
+    "sync": "node tools/build-www.js && npx cap sync android",
+    "apk": "node tools/build-www.js && npx cap sync android && cd android && gradlew.bat assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "jsdom": "^30.1.3"
+  }
+}

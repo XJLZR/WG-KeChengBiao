@@ -21,6 +21,13 @@
            地点不同不合并（避免把「同一门课换教室」错并掉）。
      冲突：同时间段两门不同课程都保留，不做裁决（本文件不涉及）。
 
+   Day 30「A 方案：别名 + 值容错」：
+     表头不再要求字面量完全一致，改为字段别名表 + 三级匹配
+     （课程名/课程名称/教学班/科目…、周次/上课周次/起止周…）；
+     单元格取值也放宽（1 / 一 / 星期一、1-16周 / 1-8,10-16 / 单双周、
+     0102 / 第1-2节 / [01-02]节）。目标：换一所学校、换一种导出写法，
+     不改代码也能导入。认不出的行仍然只跳过本行，不整体失败。
+
    错误三分类（PRD V2.3，code 大写下划线与首页错误码同风格）：
      FILE_EMPTY      文件内容为空 / 全是空白
      NOT_COURSE_FILE 找不到「课程名称」表头，不是可识别的课表文件
@@ -56,6 +63,173 @@ function splitPeriods(periodStr) {
   return [...new Set(periods)].sort((a, b) => a - b);
 }
 
+/* ============================================================
+   Day 30：宽容取值函数（列表式 A 方案的「值容错」部分）
+   ------------------------------------------------------------
+   为什么需要：各校教务导出的「同一个字段」写法差别很大——
+     星期：1 / 一 / 星期一 / 周一 / Mon
+     周次：1 / 1-16周 / 1-8,10-16 / 1-16(单) / 第1-16周
+     节次：0102 / 1-2 / 第1-2节 / [01-02]节 / 1,2
+   原来的实现只认「纯单个整数」，换个学校就整行被跳过，
+   用户看到的是「解析出 0 条记录」，却不知道为什么。
+   下面三个函数就是为了把这些差异吃掉。
+
+   关于「为什么不跟 grid-parser.js 共用一个文件」：
+     两个解析器各自要在 Node 里单独 require 做单测，互相依赖会让
+     单文件测试还得连带加载另一个文件。项目里已有同类先例
+     （ui-home.js 与 ui-import.js 各放一份 WEEKDAY_NAMES）。
+     代价是同一段逻辑存在两处，改的时候要一起改——记在这里。
+   ============================================================ */
+
+const PARSER_WEEKDAY_CN = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7 };
+const PARSER_WEEKDAY_EN = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 7 };
+
+/** 星期单元格 → 1..7；认不出返回 null */
+function parseWeekdayValue(value) {
+  const t = String(value == null ? '' : value).replace(/\s+/g, '').trim();
+  if (!t) return null;
+  const cn = t.match(/(?:星期|周|礼拜)([一二三四五六日天])/);
+  if (cn) return PARSER_WEEKDAY_CN[cn[1]];
+  if (/^[一二三四五六日天]$/.test(t)) return PARSER_WEEKDAY_CN[t];
+  const en = t.match(/^(mon|tue|wed|thu|fri|sat|sun)/i);
+  if (en) return PARSER_WEEKDAY_EN[en[1].toLowerCase()];
+  if (/^[1-7]$/.test(t)) return Number(t);
+  return null;
+}
+
+/**
+ * 周次单元格 → 升序去重数组；认不出返回 null。
+ *   1            → [1]
+ *   1-16周       → [1..16]
+ *   1-8,10-16    → [1..8, 10..16]
+ *   1-16(单)     → [1,3,5,…,15]
+ *   第1-16周     → [1..16]
+ * 与 grid-parser 的差别：这里不强制要求带「周」字——列表式里
+ * 列名已经写着「周次」，格子里只写「1-16」也是合理的。
+ */
+function parseWeeksValue(value) {
+  let t = String(value == null ? '' : value).replace(/\s/g, '');
+  if (!t) return null;
+
+  let mode = null;
+  if (/单/.test(t)) mode = 'odd';
+  else if (/双/.test(t)) mode = 'even';
+
+  t = t.replace(/[\[\]【】（）()<>《》]/g, '')
+       .replace(/^第/, '')
+       .replace(/周次|周/g, '')
+       .replace(/[单双]/g, '');
+
+  if (!/^[\d,\-]+$/.test(t)) return null;
+
+  const out = new Set();
+  for (const part of t.split(',')) {
+    if (!part) continue;
+    const range = part.match(/^(\d+)-(\d+)$/);
+    if (range) {
+      let a = Number(range[1]);
+      let b = Number(range[2]);
+      if (a > b) { const tmp = a; a = b; b = tmp; }
+      if (a < 1 || b > 30) return null;
+      for (let i = a; i <= b; i++) out.add(i);
+    } else if (/^\d+$/.test(part)) {
+      const n = Number(part);
+      if (n < 1 || n > 30) return null;
+      out.add(n);
+    } else {
+      return null;
+    }
+  }
+
+  let weeks = [...out].sort((a, b) => a - b);
+  if (mode === 'odd') weeks = weeks.filter((n) => n % 2 === 1);
+  if (mode === 'even') weeks = weeks.filter((n) => n % 2 === 0);
+  return weeks.length ? weeks : null;
+}
+
+/**
+ * 节次单元格 → 升序去重数组；认不出返回 null。
+ *   0102      → [1,2]（两位一节，本校口径）
+ *   08        → [8]
+ *   第1-2节   → [1,2]
+ *   [01-02]节 → [1,2]
+ *   1,2       → [1,2]
+ *   101112    → [10,11,12]
+ */
+function parsePeriodsValue(value) {
+  let t = String(value == null ? '' : value).replace(/\s/g, '');
+  if (!t) return null;
+  t = t.replace(/[\[\]【】]/g, '').replace(/^第/, '').replace(/节$/, '');
+  if (!t) return null;
+
+  /* 逗号列举：1,2,3 */
+  if (/^[\d,]+$/.test(t) && t.includes(',')) {
+    const parts = t.split(',').filter(Boolean).map(Number);
+    if (parts.length && parts.every((n) => n >= 1 && n <= 12)) {
+      return [...new Set(parts)].sort((a, b) => a - b);
+    }
+    return null;
+  }
+
+  /* 连字符区间：1-2 / 3-4-5 */
+  if (/^[\d\-]+$/.test(t) && t.includes('-')) {
+    const parts = t.split('-').filter(Boolean).map(Number);
+    if (parts.length && parts.every((n) => n >= 1 && n <= 12)) {
+      return [...new Set(parts)].sort((a, b) => a - b);
+    }
+    return null;
+  }
+
+  /* 纯数字串：优先两位一节，退而单字切（与 splitPeriods 兼容） */
+  if (/^\d+$/.test(t)) {
+    if (t.length % 2 === 0) {
+      const paired = [];
+      let ok = true;
+      for (let i = 0; i < t.length; i += 2) {
+        const n = Number(t.slice(i, i + 2));
+        if (n < 1 || n > 12) { ok = false; break; }
+        paired.push(n);
+      }
+      if (ok) return [...new Set(paired)].sort((a, b) => a - b);
+    }
+    const single = [...t].map(Number);
+    if (single.every((n) => n >= 1 && n <= 9)) {
+      return [...new Set(single)].sort((a, b) => a - b);
+    }
+  }
+  return null;
+}
+
+/**
+ * 在表头行里为一个字段找列下标。
+ * 三级匹配，从严格到宽松：
+ *   ① 完全相等（「周次」对「周次」）
+ *   ② 以别名开头（「周次(起止)」对「周次」）
+ *   ③ 包含别名（「上课周次」对「周次」）
+ * 找不到返回 -1。usedCols 防止两个字段抢同一列。
+ */
+function findFieldColumn(cells, aliases, usedCols) {
+  for (const alias of aliases) {
+    for (let i = 0; i < cells.length; i++) {
+      if (usedCols.has(i)) continue;
+      if (cells[i] === alias) return i;
+    }
+  }
+  for (const alias of aliases) {
+    for (let i = 0; i < cells.length; i++) {
+      if (usedCols.has(i)) continue;
+      if (cells[i].startsWith(alias)) return i;
+    }
+  }
+  for (const alias of aliases) {
+    for (let i = 0; i < cells.length; i++) {
+      if (usedCols.has(i)) continue;
+      if (cells[i].includes(alias)) return i;
+    }
+  }
+  return -1;
+}
+
 /**
  * djb2 变体稳定哈希（与 ui-home.js 课程配色同一思路）：
  * 同一输入永远得到同一输出 → 同一文件重复导入，课程 id 不变，
@@ -74,6 +248,41 @@ function stableHash(str) {
 function normalizeCellText(el) {
   return el ? el.textContent.replace(/\s+/g, ' ').trim() : '';
 }
+
+/**
+ * 字段别名表（Day 30 提到文件级，供 ui-import.js 的手动映射预填下拉框复用）。
+ * 顺序即优先级：越靠前的别名越具体，匹配时先试。
+ */
+const PARSER_HEADER_FIELDS = [
+  {
+    key: 'name', required: true, label: '课程名称',
+    aliases: ['课程名称', '课程名', '课程', '教学班', '科目', '课名'],
+  },
+  {
+    key: 'weeks', required: true, label: '周次',
+    aliases: ['周次', '上课周次', '起止周', '周数', '教学周'],
+  },
+  {
+    key: 'weekday', required: true, label: '星期',
+    aliases: ['星期', '周几', '上课星期', '星期几'],
+  },
+  {
+    key: 'periods', required: true, label: '节次',
+    aliases: ['节次', '上课节次', '节数', '课节', '节'],
+  },
+  {
+    key: 'location', required: false, label: '上课地点',
+    aliases: ['上课地点', '地点', '教室', '上课教室', '场地'],
+  },
+  {
+    key: 'teacher', required: false, label: '教师',
+    aliases: ['任课教师', '授课教师', '教师', '老师', '主讲'],
+  },
+  {
+    key: 'scheduleDate', required: false, label: '排课日期',
+    aliases: ['排课日期', '上课日期'],
+  },
+];
 
 /**
  * 主入口：课表文件文本 → 符合 API 契约的课程数组。
@@ -101,35 +310,35 @@ function parseCourseTable(htmlText) {
   const rows = [...doc.querySelectorAll('tr')];
 
   /* ---- 分类二：找不到表头（V2.3 ①） ----
-     按表头文字定位列下标，而不是写死「第 5 列是周次」：
-     教务哪天调整列序，解析器也不用跟着改。六个目标列里，
-     课程名称 / 周次 / 星期 / 节次 四列必须有，缺一个就不认；
-     上课地点 / 教师 是可空列，找不到就按「无此列」处理。 */
-  const HEADER_KEYS = [
-    { key: 'name', label: '课程名称', required: true },
-    { key: 'weeks', label: '周次', required: true },
-    { key: 'weekday', label: '星期', required: true },
-    { key: 'periods', label: '节次', required: true },
-    { key: 'location', label: '上课地点', required: false },
-    { key: 'teacher', label: '教师', required: false },
-    { key: 'scheduleDate', label: '排课日期', required: false },
-  ];
+     Day 30 起按「字段别名表」定位列：不同学校的表头文字不一样
+     （课程名 / 课程名称 / 上课周次 / 节次 / 上课节次 / 教室…），
+     写死一套字面量换个学校就全盘失败。
+     每个字段给一组候选词，按「完全相等 → 开头相同 → 包含」三级匹配，
+     命中的列不再参与后续匹配，避免两个字段抢同一列。
+     课程名称 / 周次 / 星期 / 节次 四列仍为必需；
+     上课地点 / 教师 / 排课日期 找不到就按「无此列」处理。 */
+  const HEADER_FIELDS = PARSER_HEADER_FIELDS;
 
   let headerIndex = -1;
   let colMap = null;
   for (let i = 0; i < rows.length; i++) {
     const cells = [...rows[i].querySelectorAll('td, th')].map(normalizeCellText);
-    if (!cells.some((c) => c.includes('课程名称'))) {
+    /* 判断「这行像不像表头」：只要有任意一个课程名别名出现就试一次 */
+    const nameAliases = HEADER_FIELDS[0].aliases;
+    if (!cells.some((c) => nameAliases.some((alias) => c.includes(alias)))) {
       continue;
     }
+
+    const usedCols = new Set();
     const map = {};
     let missing = null;
-    for (const { key, label, required } of HEADER_KEYS) {
-      const idx = cells.findIndex((c) => c.includes(label));
+    for (const field of HEADER_FIELDS) {
+      const idx = findFieldColumn(cells, field.aliases, usedCols);
       if (idx >= 0) {
-        map[key] = idx;
-      } else if (required) {
-        missing = label;
+        map[field.key] = idx;
+        usedCols.add(idx);
+      } else if (field.required) {
+        missing = field.label;
       }
     }
     if (missing) {
@@ -137,7 +346,7 @@ function parseCourseTable(htmlText) {
         ok: false,
         error: {
           code: 'NOT_COURSE_FILE',
-          message: `文件像课表但缺少「${missing}」列，请确认导出的是「学生个人课表-列表展示」格式。`,
+          message: `文件像课表但缺少「${missing}」列，请确认导出的是「学生个人课表」的完整文件。`,
         },
       };
     }
@@ -150,7 +359,7 @@ function parseCourseTable(htmlText) {
       ok: false,
       error: {
         code: 'NOT_COURSE_FILE',
-        message: '这不是可识别的课表文件：没找到课程表头。请从教务系统「学生个人课表 → 列表展示 → 导出」重新导出。',
+        message: '这不是可识别的课表文件：既没找到课程表头，也没找到「星期一…星期日」这样的表格布局。请从教务系统「学生个人课表」重新导出一份。',
       },
     };
   }
@@ -183,17 +392,19 @@ function parseCourseTable(htmlText) {
       continue;
     }
 
-    const weekday = Number(weekdayStr);
-    if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7) {
+    /* Day 30：取值改为宽容解析——「星期一 / 周一 / 1」「1-16周 / 1-8,10-16」
+       「第1-2节 / [01-02]节 / 0102」都认。认不出的行仍然只跳过本行。 */
+    const weekday = parseWeekdayValue(weekdayStr);
+    if (weekday === null) {
       skippedRows++;
       continue;
     }
-    const week = Number(weekStr);
-    if (!Number.isInteger(week) || week < 1 || week > 30) {
+    const weeks = parseWeeksValue(weekStr);
+    if (!weeks) {
       skippedRows++;
       continue;
     }
-    const periods = splitPeriods(periodStr);
+    const periods = parsePeriodsValue(periodStr);
     if (!periods) {
       skippedRows++;
       continue;
@@ -211,8 +422,11 @@ function parseCourseTable(htmlText) {
     const mergeKey = `${name}|${weekday}|${periods.join(',')}|${location}`;
     if (merged.has(mergeKey)) {
       const draft = merged.get(mergeKey);
-      if (!draft.weeks.includes(week)) {
-        draft.weeks.push(week);
+      /* Day 30：一行的周次可能本身就是多周（1-16周），逐周并进去 */
+      for (const w of weeks) {
+        if (!draft.weeks.includes(w)) {
+          draft.weeks.push(w);
+        }
       }
       /* 教师不在合并 key 里：取组内第一条非空的 */
       if (!draft.teacher && teacher) {
@@ -233,7 +447,7 @@ function parseCourseTable(htmlText) {
         name,
         weekday,
         periods,
-        weeks: [week],
+        weeks: weeks.slice(),
         location,
         teacher,
       });
@@ -283,5 +497,14 @@ function parseCourseTable(htmlText) {
    Node 里 require 本文件后拿到 { parseCourseTable, splitPeriods } 做断言。
    顶层 function 声明在浏览器自动挂 window，ui-import.js 直接用全局名调用。 */
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { parseCourseTable, splitPeriods, stableHash };
+  module.exports = {
+    parseCourseTable,
+    splitPeriods,
+    stableHash,
+    parseWeekdayValue,
+    parseWeeksValue,
+    parsePeriodsValue,
+    findFieldColumn,
+    PARSER_HEADER_FIELDS,
+  };
 }
